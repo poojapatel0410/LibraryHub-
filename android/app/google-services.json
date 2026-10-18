@@ -1,0 +1,39 @@
+{
+  "project_info": {
+    "project_number": "1038837354408",
+    "project_id": "libraryhub-7a835",
+    "storage_bucket": "libraryhub-7a835.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1038837354408:android:9e4bbfb31951536b13979d",
+        "android_client_info": {
+          "package_name": "com.libraryhub.library_hub"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1038837354408-aidoh6qbdpmq3mlmotb6hp259vi96q5i.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDoc1d1DfXmt0h2nw3OnHmsTYRa29r2mlM"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1038837354408-aidoh6qbdpmq3mlmotb6hp259vi96q5i.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
