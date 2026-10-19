@@ -659,20 +659,17 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ),
               ),
               const SizedBox(height: 6),
-              Row(
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
                 children: [
                   _buildLoanBadge('Issued: $issuedCount',
                       issuedCount > 0 ? AppTheme.warning : AppTheme.textMuted),
-                  const SizedBox(width: 8),
                   _buildLoanBadge('Returned: $returnedCount', AppTheme.success),
-                  if (studentRemainingFine > 0) ...[
-                    const SizedBox(width: 8),
+                  if (studentRemainingFine > 0)
                     _buildLoanBadge('Due: ₹$studentRemainingFine', AppTheme.error),
-                  ],
-                  if (studentFinePaid > 0) ...[
-                    const SizedBox(width: 8),
+                  if (studentFinePaid > 0)
                     _buildLoanBadge('Paid: ₹$studentFinePaid', AppTheme.success),
-                  ],
                 ],
               ),
             ],
