@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import '../models/book.dart';
 import '../utils/app_theme.dart';
+import 'book_cover_image.dart';
 
 /// A premium book card widget used in the HomeScreen grid/list.
 class BookCard extends StatefulWidget {
@@ -132,15 +133,13 @@ class _BookCardState extends State<BookCard>
                       // If image is provided, display image with subtle overlay
                       if (widget.book.hasImage) ...[
                         Positioned.fill(
-                          child: ClipRRect(
+                          child: BookCoverImage(
+                            imageUrl: widget.book.imageUrl,
+                            fit: BoxFit.cover,
                             borderRadius: const BorderRadius.vertical(
                               top: Radius.circular(18),
                             ),
-                            child: Image.network(
-                              widget.book.imageUrl,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
-                            ),
+                            fallback: const SizedBox.shrink(),
                           ),
                         ),
                         Positioned.fill(

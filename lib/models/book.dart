@@ -16,11 +16,15 @@ class Book {
     this.imageUrl = '',
   });
 
-  /// True if book has a valid web image URL.
-  bool get hasImage =>
-      imageUrl.trim().isNotEmpty &&
-      (imageUrl.trim().startsWith('http://') ||
-          imageUrl.trim().startsWith('https://'));
+  /// True if book has a valid web image URL or gallery image base64 data.
+  bool get hasImage {
+    final trimmed = imageUrl.trim();
+    if (trimmed.isEmpty) return false;
+    return trimmed.startsWith('http://') ||
+        trimmed.startsWith('https://') ||
+        trimmed.startsWith('data:image') ||
+        trimmed.length > 200;
+  }
 
   /// Creates a [Book] from a Firestore document snapshot map with flexible
   /// key matching to handle common typos like 'auther', 'Author', etc.

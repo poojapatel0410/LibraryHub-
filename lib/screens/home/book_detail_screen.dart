@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../services/firestore_service.dart';
 import '../../utils/app_theme.dart';
 import '../../widgets/gradient_button.dart';
+import '../../widgets/book_cover_image.dart';
 import '../profile/edit_profile_screen.dart';
 
 /// Detailed view for a single book with borrow functionality.
@@ -481,10 +482,10 @@ class _BookDetailScreenState extends State<BookDetailScreen>
           // If image is available, display image cover
           if (book.hasImage) ...[
             Positioned.fill(
-              child: Image.network(
-                book.imageUrl,
+              child: BookCoverImage(
+                imageUrl: book.imageUrl,
                 fit: BoxFit.cover,
-                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                fallback: const SizedBox.shrink(),
               ),
             ),
             Positioned.fill(
