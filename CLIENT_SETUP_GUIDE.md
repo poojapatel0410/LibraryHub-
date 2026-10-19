@@ -160,7 +160,11 @@ Cloud Firestore
           ├── bookTitle: String
           ├── borrowDate: Timestamp
           ├── returnDate: Timestamp (Due Date)
-          └── status: "Active" | "Returned"
+          ├── status: "Active" | "Returned"
+          ├── finePaid: int (Cash paid by user, e.g. 10)
+          ├── actualReturnDate: Timestamp? (Physical return time)
+          ├── frozenFine: int? (Assessed late fee snapshot)
+          └── lastPaymentDate: Timestamp? (Last cash collection time)
 ```
 
 ---
@@ -194,16 +198,25 @@ Here is a recommended testing flow to demonstrate all features:
 3. Tap **"Return Book"** and confirm.
 4. The status turns to **"Returned"**, and 1 copy is instantly restored back to the inventory catalogue!
 
-### Test Case 4: Overdue Book Late Fine (₹3 / day - Cash)
-1. If a student holds an active book past its scheduled due date, it is automatically flagged as **Overdue**.
-2. **Student Side**:
-   - Each overdue book displays an alert: `Overdue by X day(s) • Fine: ₹(X * 3)`.
-   - Top banner aggregates: `Total Cash Fine Due: ₹Total. Please pay in cash at the library desk.`
-   - Return confirmation dialog warns the student to pay the cash fine at the counter when handing in the book.
-3. **Admin Side**:
-   - Top KPI highlights: `Total Cash Fines to Collect: ₹Total`.
-   - Student directory cards display individual fine badges: `Fine: ₹X (Cash)`.
-   - Expanded student records detail overdue days and book-wise cash amounts to collect.
+### Test Case 4: Overdue Book Late Fine & Partial Cash Payment (₹3 / day - Cash)
+1. If a student holds an active book past its scheduled due date, it is automatically flagged as **Overdue** at ₹3/day.
+2. **Example Scenario (₹12 Fee with Partial ₹10 Payment)**:
+   - Total overdue fee assessed = **₹12**.
+   - Student hands **₹10** in cash at the counter.
+   - Admin taps **"Manage Cash"** on the loan record in the Admin Portal.
+   - Admin enters `10` in the cash input (or sets total paid to `10`) and saves.
+   - **Student Side ("My Books")**:
+     - Status updates to: `Due: ₹2 (Paid ₹10)`.
+     - Fine card displays: `Fee: ₹12 | Paid: ₹10 | Due: ₹2`.
+     - Alert explains: *"You paid ₹10 in cash. Remaining balance of ₹2 is still due at the counter."*
+     - Top banner aggregates: `Cash Fine Due: ₹2`.
+   - **Admin Side**:
+     - Student card displays badge: `Due: ₹2 • Paid: ₹10`.
+     - Top KPI banner reflects: `Cash Fines Pending: ₹2 • Cash Collected: ₹10`.
+     - The ₹2 balance persists even after the physical book is returned until fully settled.
+   - **Full Settlement**:
+     - When the student pays the remaining ₹2, Admin clicks **"Manage Cash"** > **"Full Balance: ₹2"** > **Save**.
+     - Both Admin and Student portals instantly update to `✓ Fine Paid: ₹12 in Cash (No Balance)`.
 
 ---
 

@@ -9,6 +9,10 @@ class BorrowHistory {
   final DateTime borrowDate;
   final DateTime returnDate;
   final String status; // "Active" | "Returned"
+  final int finePaid; // Cash amount in INR (₹) collected from the user so far
+  final DateTime? actualReturnDate; // Physical return timestamp
+  final int? frozenFine; // Snapshot of overdue fine at return time or when assessed
+  final DateTime? lastPaymentDate; // Timestamp of the last cash fine payment
 
   const BorrowHistory({
     required this.transactionId,
@@ -18,6 +22,10 @@ class BorrowHistory {
     required this.borrowDate,
     required this.returnDate,
     required this.status,
+    this.finePaid = 0,
+    this.actualReturnDate,
+    this.frozenFine,
+    this.lastPaymentDate,
   });
 
   /// Creates a [BorrowHistory] from a Firestore document snapshot map.
@@ -31,6 +39,10 @@ class BorrowHistory {
       returnDate:
           (map['returnDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
       status: map['status'] as String? ?? 'Active',
+      finePaid: (map['finePaid'] as num?)?.toInt() ?? 0,
+      actualReturnDate: (map['actualReturnDate'] as Timestamp?)?.toDate(),
+      frozenFine: (map['frozenFine'] as num?)?.toInt(),
+      lastPaymentDate: (map['lastPaymentDate'] as Timestamp?)?.toDate(),
     );
   }
 
@@ -44,14 +56,28 @@ class BorrowHistory {
       'borrowDate': Timestamp.fromDate(borrowDate),
       'returnDate': Timestamp.fromDate(returnDate),
       'status': status,
+      'finePaid': finePaid,
+      if (actualReturnDate != null)
+        'actualReturnDate': Timestamp.fromDate(actualReturnDate!),
+      if (frozenFine != null) 'frozenFine': frozenFine,
+      if (lastPaymentDate != null)
+        'lastPaymentDate': Timestamp.fromDate(lastPaymentDate!),
     };
   }
 
   /// Returns true if this borrow is currently active (not yet returned).
   bool get isActive => status == 'Active';
 
-  /// Returns true if the return date has passed and book is still active.
-  bool get isOverdue => isActive && DateTime.now().isAfter(returnDate);
+  /// Returns true if this loan has exceeded its due date.
+  bool get isOverdue {
+    if (isActive) {
+      return DateTime.now().isAfter(returnDate);
+    } else if (actualReturnDate != null) {
+      return actualReturnDate!.isAfter(returnDate);
+    } else {
+      return (frozenFine != null && frozenFine! > 0) || finePaid > 0;
+    }
+  }
 
   /// Overdue fine rate (₹3 per book per day).
   static const int dailyFineRate = 3;
@@ -59,15 +85,44 @@ class BorrowHistory {
   /// Number of whole days overdue (minimum 1 day if return date has passed).
   int get overdueDays {
     if (!isOverdue) return 0;
-    final diff = DateTime.now().difference(returnDate);
+    if (frozenFine != null && frozenFine! > 0) {
+      return (frozenFine! / dailyFineRate).ceil();
+    }
+    final referenceDate =
+        isActive ? DateTime.now() : (actualReturnDate ?? returnDate);
+    final diff = referenceDate.difference(returnDate);
     final days = diff.inDays;
     return days > 0 ? days : 1;
   }
 
-  /// Total overdue fine amount in INR (₹) to be collected in cash.
-  int get overdueFine => overdueDays * dailyFineRate;
+  /// Total calculated/assessed overdue fine amount in INR (₹).
+  int get totalFine {
+    if (frozenFine != null && frozenFine! > 0) {
+      return frozenFine!;
+    }
+    return overdueDays * dailyFineRate;
+  }
+
+  /// Backward-compatible alias for totalFine.
+  int get overdueFine => totalFine;
+
+  /// Remaining unpaid cash fine balance in INR (₹).
+  /// E.g. If fee is ₹12 and user paid ₹10, remainingFine is ₹2.
+  int get remainingFine {
+    final balance = totalFine - finePaid;
+    return balance > 0 ? balance : 0;
+  }
+
+  /// True if a fine has been incurred/assessed on this book.
+  bool get hasFine => totalFine > 0;
+
+  /// True if the user has paid part of the fine but still has an outstanding balance.
+  bool get isPartiallyPaid => finePaid > 0 && remainingFine > 0;
+
+  /// True if the fine is completely settled.
+  bool get isFineFullyPaid => totalFine > 0 && remainingFine == 0;
 
   @override
   String toString() =>
-      'BorrowHistory(transactionId: $transactionId, bookTitle: $bookTitle, status: $status, fine: ₹$overdueFine)';
+      'BorrowHistory(transactionId: $transactionId, bookTitle: $bookTitle, status: $status, totalFine: ₹$totalFine, paid: ₹$finePaid, remaining: ₹$remainingFine)';
 }

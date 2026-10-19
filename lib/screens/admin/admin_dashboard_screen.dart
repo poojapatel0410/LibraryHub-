@@ -311,10 +311,16 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             final totalStudents = users.length;
             final activeLoans = history.where((h) => h.isActive).length;
             final returnedLoans = history.where((h) => !h.isActive).length;
-            final totalFinesDue = history
-                .where((h) => h.isOverdue)
-                .fold<int>(0, (sum, h) => sum + h.overdueFine);
-            final overdueLoansCount = history.where((h) => h.isOverdue).length;
+
+            final totalFinesAssessed = history
+                .where((h) => h.hasFine)
+                .fold<int>(0, (sum, h) => sum + h.totalFine);
+            final totalCashCollected = history
+                .fold<int>(0, (sum, h) => sum + h.finePaid);
+            final totalFinesPending = history
+                .fold<int>(0, (sum, h) => sum + h.remainingFine);
+            final unpaidLoansCount =
+                history.where((h) => h.remainingFine > 0).length;
 
             final filteredUsers = users.where((u) {
               if (_userSearchQuery.isEmpty) return true;
@@ -361,8 +367,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     ],
                   ),
 
-                  // Cash Fines to Collect Banner (if any overdue)
-                  if (totalFinesDue > 0) ...[
+                  // Cash Fines to Collect Banner (if any pending or collected)
+                  if (totalFinesPending > 0 || totalCashCollected > 0) ...[
                     const SizedBox(height: 12),
                     Container(
                       padding: const EdgeInsets.symmetric(
@@ -370,13 +376,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           colors: [
-                            AppTheme.error.withValues(alpha: 0.18),
+                            (totalFinesPending > 0
+                                    ? AppTheme.error
+                                    : AppTheme.success)
+                                .withValues(alpha: 0.18),
                             AppTheme.warning.withValues(alpha: 0.12),
                           ],
                         ),
                         borderRadius: BorderRadius.circular(14),
                         border: Border.all(
-                          color: AppTheme.error.withValues(alpha: 0.4),
+                          color: (totalFinesPending > 0
+                                  ? AppTheme.error
+                                  : AppTheme.success)
+                              .withValues(alpha: 0.4),
                           width: 1.2,
                         ),
                       ),
@@ -385,12 +397,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           Container(
                             padding: const EdgeInsets.all(8),
                             decoration: BoxDecoration(
-                              color: AppTheme.error.withValues(alpha: 0.25),
+                              color: (totalFinesPending > 0
+                                      ? AppTheme.error
+                                      : AppTheme.success)
+                                  .withValues(alpha: 0.25),
                               shape: BoxShape.circle,
                             ),
-                            child: const Icon(
-                              Icons.payments_rounded,
-                              color: AppTheme.error,
+                            child: Icon(
+                              totalFinesPending > 0
+                                  ? Icons.payments_rounded
+                                  : Icons.check_circle_rounded,
+                              color: totalFinesPending > 0
+                                  ? AppTheme.error
+                                  : AppTheme.success,
                               size: 22,
                             ),
                           ),
@@ -399,18 +418,33 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Total Cash Fines to Collect: ₹$totalFinesDue',
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w800,
-                                    color: AppTheme.error,
-                                  ),
+                                Row(
+                                  children: [
+                                    Text(
+                                      'Cash Fines Pending: ',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 14,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.textPrimary,
+                                      ),
+                                    ),
+                                    Text(
+                                      '₹$totalFinesPending',
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                        color: totalFinesPending > 0
+                                            ? AppTheme.error
+                                            : AppTheme.success,
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                const SizedBox(height: 2),
                                 Text(
-                                  '$overdueLoansCount overdue book(s) across students (₹3/day). Collect in cash at the counter upon book return.',
+                                  'Total Assessed: ₹$totalFinesAssessed • Cash Collected: ₹$totalCashCollected • $unpaidLoansCount loan(s) pending payment',
                                   style: GoogleFonts.outfit(
-                                    fontSize: 12,
+                                    fontSize: 11,
                                     color: AppTheme.textSecondary,
                                   ),
                                 ),
@@ -498,9 +532,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           studentLoans.where((h) => h.isActive).length;
                       final returnedCount =
                           studentLoans.where((h) => !h.isActive).length;
-                      final studentFine = studentLoans
-                          .where((h) => h.isOverdue)
-                          .fold<int>(0, (sum, h) => sum + h.overdueFine);
+                      final studentTotalFine = studentLoans
+                          .where((h) => h.hasFine)
+                          .fold<int>(0, (sum, h) => sum + h.totalFine);
+                      final studentFinePaid = studentLoans
+                          .fold<int>(0, (sum, h) => sum + h.finePaid);
+                      final studentRemainingFine = studentLoans
+                          .fold<int>(0, (sum, h) => sum + h.remainingFine);
                       final studentOverdueCount =
                           studentLoans.where((h) => h.isOverdue).length;
 
@@ -509,7 +547,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         issuedCount: issuedCount,
                         returnedCount: returnedCount,
                         loans: studentLoans,
-                        studentFine: studentFine,
+                        studentTotalFine: studentTotalFine,
+                        studentFinePaid: studentFinePaid,
+                        studentRemainingFine: studentRemainingFine,
                         studentOverdueCount: studentOverdueCount,
                       );
                     }),
@@ -572,7 +612,9 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required int issuedCount,
     required int returnedCount,
     required List<BorrowHistory> loans,
-    required int studentFine,
+    required int studentTotalFine,
+    required int studentFinePaid,
+    required int studentRemainingFine,
     required int studentOverdueCount,
   }) {
     final displayName = user.name.isNotEmpty
@@ -623,9 +665,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       issuedCount > 0 ? AppTheme.warning : AppTheme.textMuted),
                   const SizedBox(width: 8),
                   _buildLoanBadge('Returned: $returnedCount', AppTheme.success),
-                  if (studentFine > 0) ...[
+                  if (studentRemainingFine > 0) ...[
                     const SizedBox(width: 8),
-                    _buildLoanBadge('Fine: ₹$studentFine (Cash)', AppTheme.error),
+                    _buildLoanBadge('Due: ₹$studentRemainingFine', AppTheme.error),
+                  ],
+                  if (studentFinePaid > 0) ...[
+                    const SizedBox(width: 8),
+                    _buildLoanBadge('Paid: ₹$studentFinePaid', AppTheme.success),
                   ],
                 ],
               ),
@@ -645,30 +691,62 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       Icons.school_rounded, 'Education', user.education),
                   _buildUserDetailRow(
                       Icons.location_on_rounded, 'Address', user.address),
-                  if (studentFine > 0) ...[
+                  if (studentTotalFine > 0) ...[
                     Container(
                       margin: const EdgeInsets.symmetric(vertical: 8),
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                          horizontal: 12, vertical: 10),
                       decoration: BoxDecoration(
-                        color: AppTheme.error.withValues(alpha: 0.12),
+                        color: (studentRemainingFine > 0
+                                ? AppTheme.error
+                                : AppTheme.success)
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(10),
                         border: Border.all(
-                            color: AppTheme.error.withValues(alpha: 0.35)),
+                            color: (studentRemainingFine > 0
+                                    ? AppTheme.error
+                                    : AppTheme.success)
+                                .withValues(alpha: 0.35)),
                       ),
                       child: Row(
                         children: [
-                          const Icon(Icons.payments_rounded,
-                              color: AppTheme.error, size: 18),
-                          const SizedBox(width: 8),
+                          Icon(
+                            studentRemainingFine > 0
+                                ? Icons.payments_rounded
+                                : Icons.check_circle_rounded,
+                            color: studentRemainingFine > 0
+                                ? AppTheme.error
+                                : AppTheme.success,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
                           Expanded(
-                            child: Text(
-                              'Pending Cash Fine: ₹$studentFine ($studentOverdueCount overdue book(s) at ₹3/day)',
-                              style: GoogleFonts.outfit(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.error,
-                              ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  studentRemainingFine > 0
+                                      ? 'Cash Fine Due: ₹$studentRemainingFine (Total Fee: ₹$studentTotalFine)'
+                                      : 'All Cash Fines Settled: ₹$studentFinePaid Paid ✓',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: studentRemainingFine > 0
+                                        ? AppTheme.error
+                                        : AppTheme.success,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  studentRemainingFine > 0
+                                      ? 'Paid: ₹$studentFinePaid • Remaining balance: ₹$studentRemainingFine. Tap "Manage Cash" below to record payment.'
+                                      : 'Student has no pending late fee balance.',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
                         ],
@@ -697,91 +775,157 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   else
                     ...loans.map(
                       (loan) {
-                        final isOverdue = loan.isOverdue;
+                        final hasFine = loan.hasFine;
+                        final totalFine = loan.totalFine;
+                        final finePaid = loan.finePaid;
+                        final remainingFine = loan.remainingFine;
+
                         return Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 8),
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: isOverdue
+                            color: remainingFine > 0
                                 ? AppTheme.error.withValues(alpha: 0.08)
                                 : AppTheme.bgCardLight,
-                            borderRadius: BorderRadius.circular(8),
-                            border: isOverdue
-                                ? Border.all(
-                                    color:
-                                        AppTheme.error.withValues(alpha: 0.25))
-                                : null,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: (remainingFine > 0
+                                      ? AppTheme.error
+                                      : (hasFine
+                                          ? AppTheme.success
+                                          : Colors.white10))
+                                  .withValues(alpha: 0.25),
+                            ),
                           ),
-                          child: Row(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(
-                                isOverdue
-                                    ? Icons.warning_amber_rounded
-                                    : (loan.isActive
-                                        ? Icons.book_rounded
-                                        : Icons.check_circle_outline),
-                                size: 16,
-                                color: isOverdue
-                                    ? AppTheme.error
-                                    : (loan.isActive
-                                        ? AppTheme.warning
-                                        : AppTheme.success),
-                              ),
-                              const SizedBox(width: 8),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text(
+                              Row(
+                                children: [
+                                  Icon(
+                                    remainingFine > 0
+                                        ? Icons.warning_amber_rounded
+                                        : (loan.isActive
+                                            ? Icons.book_rounded
+                                            : Icons.check_circle_outline),
+                                    size: 16,
+                                    color: remainingFine > 0
+                                        ? AppTheme.error
+                                        : (loan.isActive
+                                            ? AppTheme.warning
+                                            : AppTheme.success),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
                                       loan.bookTitle,
                                       style: GoogleFonts.outfit(
-                                        fontSize: 12,
+                                        fontSize: 13,
                                         color: AppTheme.textPrimary,
                                         fontWeight: FontWeight.w600,
                                       ),
                                       maxLines: 1,
                                       overflow: TextOverflow.ellipsis,
                                     ),
-                                    if (isOverdue)
-                                      Text(
-                                        'Overdue by ${loan.overdueDays} day(s) • ₹3/day',
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: (loan.isActive
+                                              ? AppTheme.warning
+                                              : AppTheme.success)
+                                          .withValues(alpha: 0.15),
+                                      borderRadius: BorderRadius.circular(4),
+                                    ),
+                                    child: Text(
+                                      loan.status,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.w700,
+                                        color: loan.isActive
+                                            ? AppTheme.warning
+                                            : AppTheme.success,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (hasFine) ...[
+                                const SizedBox(height: 6),
+                                Row(
+                                  children: [
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Fee: ₹$totalFine • Paid: ₹$finePaid • Due: ₹$remainingFine',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 11,
+                                              fontWeight: FontWeight.w700,
+                                              color: remainingFine > 0
+                                                  ? AppTheme.error
+                                                  : AppTheme.success,
+                                            ),
+                                          ),
+                                          Text(
+                                            remainingFine > 0
+                                                ? 'Late by ${loan.overdueDays} day(s) • ₹3/day'
+                                                : 'Fine fully settled in cash',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 10,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                    TextButton.icon(
+                                      style: TextButton.styleFrom(
+                                        backgroundColor: remainingFine > 0
+                                            ? AppTheme.primary
+                                                .withValues(alpha: 0.2)
+                                            : AppTheme.success
+                                                .withValues(alpha: 0.15),
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 8, vertical: 4),
+                                        shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                        ),
+                                        minimumSize: Size.zero,
+                                        tapTargetSize: MaterialTapTargetSize
+                                            .shrinkWrap,
+                                      ),
+                                      icon: Icon(
+                                        remainingFine > 0
+                                            ? Icons.payments_rounded
+                                            : Icons.check_circle_rounded,
+                                        size: 13,
+                                        color: remainingFine > 0
+                                            ? AppTheme.primary
+                                            : AppTheme.success,
+                                      ),
+                                      label: Text(
+                                        remainingFine > 0
+                                            ? 'Manage Cash (₹$remainingFine)'
+                                            : 'Cash Paid ✓',
                                         style: GoogleFonts.outfit(
-                                          fontSize: 10,
-                                          color: AppTheme.error,
-                                          fontWeight: FontWeight.w500,
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w700,
+                                          color: remainingFine > 0
+                                              ? AppTheme.primary
+                                              : AppTheme.success,
                                         ),
                                       ),
+                                      onPressed: () =>
+                                          _showManageCashDialog(loan, user),
+                                    ),
                                   ],
                                 ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: (isOverdue
-                                          ? AppTheme.error
-                                          : (loan.isActive
-                                              ? AppTheme.warning
-                                              : AppTheme.success))
-                                      .withValues(alpha: 0.15),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  isOverdue
-                                      ? '₹${loan.overdueFine} Cash'
-                                      : loan.status,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w700,
-                                    color: isOverdue
-                                        ? AppTheme.error
-                                        : (loan.isActive
-                                            ? AppTheme.warning
-                                            : AppTheme.success),
-                                  ),
-                                ),
-                              ),
+                              ],
                             ],
                           ),
                         );
@@ -793,6 +937,561 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
       ),
+    );
+  }
+
+  void _showManageCashDialog(BorrowHistory loan, UserModel user) {
+    final amountController =
+        TextEditingController(text: loan.remainingFine.toString());
+    bool isSetDirectly = false;
+    bool alsoReturnBook = loan.isActive;
+
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (dialogContext, setDialogState) {
+            final int enteredAmount =
+                int.tryParse(amountController.text.trim()) ?? 0;
+            final int previewTotalPaid = isSetDirectly
+                ? enteredAmount
+                : (loan.finePaid + enteredAmount);
+            final int previewRemaining =
+                (loan.totalFine - previewTotalPaid).clamp(0, loan.totalFine);
+
+            return AlertDialog(
+              backgroundColor: AppTheme.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.point_of_sale_rounded,
+                        color: AppTheme.primary, size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Manage Cash Payment',
+                          style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Student: ${user.name.isNotEmpty ? user.name : user.email}',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: AppTheme.textSecondary,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Book info
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgCardLight,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.menu_book_rounded,
+                              size: 16, color: AppTheme.primary),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              loan.bookTitle,
+                              style: GoogleFonts.outfit(
+                                fontSize: 13,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.textPrimary,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Metrics breakdown card
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppTheme.bgCardLight,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08)),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Total Fee',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₹${loan.totalFine}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  '${loan.overdueDays}d @ ₹3/d',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                              width: 1, height: 32, color: Colors.white12),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Paid (Cash)',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₹${loan.finePaid}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.success,
+                                  ),
+                                ),
+                                Text(
+                                  'Collected',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                              width: 1, height: 32, color: Colors.white12),
+                          Expanded(
+                            child: Column(
+                              children: [
+                                Text(
+                                  'Balance Due',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  '₹${loan.remainingFine}',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: loan.remainingFine > 0
+                                        ? AppTheme.error
+                                        : AppTheme.success,
+                                  ),
+                                ),
+                                Text(
+                                  loan.remainingFine > 0 ? 'Pending' : 'Settled',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 9,
+                                    color: loan.remainingFine > 0
+                                        ? AppTheme.error
+                                        : AppTheme.success,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    const SizedBox(height: 14),
+
+                    // Quick action presets
+                    if (loan.remainingFine > 0) ...[
+                      Text(
+                        'QUICK CASH PRESETS',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textMuted,
+                          letterSpacing: 1,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        children: [
+                          ActionChip(
+                            avatar: const Icon(Icons.flash_on_rounded,
+                                size: 14, color: Colors.white),
+                            label: Text(
+                              'Full Balance: ₹${loan.remainingFine}',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 11, fontWeight: FontWeight.w700),
+                            ),
+                            backgroundColor:
+                                AppTheme.primary.withValues(alpha: 0.3),
+                            onPressed: () {
+                              setDialogState(() {
+                                isSetDirectly = true;
+                                amountController.text =
+                                    loan.totalFine.toString();
+                              });
+                            },
+                          ),
+                          if (loan.remainingFine > 10)
+                            ActionChip(
+                              label: Text('₹10',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600)),
+                              backgroundColor: AppTheme.bgCardLight,
+                              onPressed: () {
+                                setDialogState(() {
+                                  isSetDirectly = false;
+                                  amountController.text = '10';
+                                });
+                              },
+                            ),
+                          if (loan.remainingFine > 5)
+                            ActionChip(
+                              label: Text('₹5',
+                                  style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600)),
+                              backgroundColor: AppTheme.bgCardLight,
+                              onPressed: () {
+                                setDialogState(() {
+                                  isSetDirectly = false;
+                                  amountController.text = '5';
+                                });
+                              },
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                    ],
+
+                    // Mode selector
+                    Row(
+                      children: [
+                        Expanded(
+                          child: InkWell(
+                            onTap: () =>
+                                setDialogState(() => isSetDirectly = false),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: !isSetDirectly
+                                    ? AppTheme.primary.withValues(alpha: 0.25)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: !isSetDirectly
+                                      ? AppTheme.primary
+                                      : Colors.white12,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  '+ Add Cash Paid',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: !isSetDirectly
+                                        ? FontWeight.w700
+                                        : FontWeight.normal,
+                                    color: !isSetDirectly
+                                        ? AppTheme.primary
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: InkWell(
+                            onTap: () =>
+                                setDialogState(() => isSetDirectly = true),
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                  vertical: 6, horizontal: 8),
+                              decoration: BoxDecoration(
+                                color: isSetDirectly
+                                    ? AppTheme.primary.withValues(alpha: 0.25)
+                                    : Colors.transparent,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: isSetDirectly
+                                      ? AppTheme.primary
+                                      : Colors.white12,
+                                ),
+                              ),
+                              child: Center(
+                                child: Text(
+                                  'Set Total Paid',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: isSetDirectly
+                                        ? FontWeight.w700
+                                        : FontWeight.normal,
+                                    color: isSetDirectly
+                                        ? AppTheme.primary
+                                        : AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Amount input field
+                    TextField(
+                      controller: amountController,
+                      keyboardType: TextInputType.number,
+                      onChanged: (_) => setDialogState(() {}),
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: isSetDirectly
+                            ? 'Total Cash Paid (₹)'
+                            : 'Cash Received Now (₹)',
+                        labelStyle: GoogleFonts.outfit(
+                            fontSize: 12, color: AppTheme.textSecondary),
+                        prefixIcon: const Icon(Icons.currency_rupee_rounded,
+                            size: 18, color: AppTheme.primary),
+                        filled: true,
+                        fillColor: AppTheme.bgCardLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.1)),
+                        ),
+                      ),
+                    ),
+
+                    const SizedBox(height: 10),
+
+                    // Live calculation feedback
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: (previewRemaining > 0
+                                ? AppTheme.warning
+                                : AppTheme.success)
+                            .withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: (previewRemaining > 0
+                                  ? AppTheme.warning
+                                  : AppTheme.success)
+                              .withValues(alpha: 0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            previewRemaining > 0
+                                ? Icons.info_outline_rounded
+                                : Icons.check_circle_outline_rounded,
+                            size: 16,
+                            color: previewRemaining > 0
+                                ? AppTheme.warning
+                                : AppTheme.success,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              previewRemaining > 0
+                                  ? 'Result: ₹$previewTotalPaid paid • Remaining balance of ₹$previewRemaining will still be shown.'
+                                  : 'Result: Full ₹${loan.totalFine} paid! Loan will be marked fully settled.',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: previewRemaining > 0
+                                    ? AppTheme.warning
+                                    : AppTheme.success,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // Optional: Mark as returned if active
+                    if (loan.isActive) ...[
+                      const SizedBox(height: 10),
+                      CheckboxListTile(
+                        value: alsoReturnBook,
+                        onChanged: (val) =>
+                            setDialogState(() => alsoReturnBook = val ?? true),
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        activeColor: AppTheme.primary,
+                        title: Text(
+                          'Also mark book as Returned (+1 copy to library)',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.outfit(color: AppTheme.textMuted),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  icon: const Icon(Icons.check_rounded, size: 16),
+                  label: Text(
+                    'Save Payment',
+                    style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
+                  ),
+                  onPressed: () async {
+                    final int val =
+                        int.tryParse(amountController.text.trim()) ?? 0;
+                    if (val < 0) return;
+
+                    final int finalPaid =
+                        isSetDirectly ? val : (loan.finePaid + val);
+
+                    try {
+                      await _firestoreService.recordFinePayment(
+                        transactionId: loan.transactionId,
+                        newTotalPaid: finalPaid,
+                        freezeFine: loan.totalFine,
+                      );
+
+                      if (alsoReturnBook && loan.isActive) {
+                        await _firestoreService.returnBook(
+                          transactionId: loan.transactionId,
+                          bookId: loan.bookId,
+                          currentOverdueFine: loan.totalFine,
+                        );
+                      }
+
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+
+                      if (!mounted) return;
+                      final remaining =
+                          (loan.totalFine - finalPaid).clamp(0, loan.totalFine);
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Row(
+                            children: [
+                              const Icon(Icons.check_circle_outline,
+                                  color: AppTheme.success, size: 20),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  remaining > 0
+                                      ? 'Cash payment recorded! Total paid: ₹$finalPaid. Balance due: ₹$remaining'
+                                      : 'Late fee fully settled (₹$finalPaid paid in cash)!',
+                                  style: GoogleFonts.outfit(
+                                      color: AppTheme.textPrimary),
+                                ),
+                              ),
+                            ],
+                          ),
+                          backgroundColor: AppTheme.bgCardLight,
+                          behavior: SnackBarBehavior.floating,
+                          margin: const EdgeInsets.all(16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                      );
+                    } catch (e) {
+                      if (!ctx.mounted) return;
+                      Navigator.pop(ctx);
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text('Failed to record cash: $e'),
+                          backgroundColor: AppTheme.error,
+                        ),
+                      );
+                    }
+                  },
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

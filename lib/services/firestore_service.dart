@@ -166,17 +166,30 @@ class FirestoreService {
   // -- Return Book ------------------------------------------------------------
 
   /// Marks a borrow transaction as "Returned" and increments `availableCopies`.
+  /// Also preserves [actualReturnDate] and optionally captures [currentOverdueFine] snapshot.
   Future<void> returnBook({
     required String transactionId,
     required String bookId,
+    int? currentOverdueFine,
   }) async {
     final WriteBatch batch = _db.batch();
+    final now = DateTime.now();
 
     // Update borrow_history status
     final historyRef = _db
         .collection(AppConstants.borrowHistoryCollection)
         .doc(transactionId);
-    batch.update(historyRef, {'status': AppConstants.statusReturned});
+
+    final Map<String, dynamic> historyUpdates = {
+      'status': AppConstants.statusReturned,
+      'actualReturnDate': Timestamp.fromDate(now),
+    };
+
+    if (currentOverdueFine != null && currentOverdueFine > 0) {
+      historyUpdates['frozenFine'] = currentOverdueFine;
+    }
+
+    batch.update(historyRef, historyUpdates);
 
     // Increment availableCopies
     final bookRef =
@@ -186,5 +199,38 @@ class FirestoreService {
     });
 
     await batch.commit();
+  }
+
+  // -- Fine Payment Management ------------------------------------------------
+
+  /// Records a cash fine payment collected by the admin for a borrow transaction.
+  /// If [newTotalPaid] is specified, explicitly sets the total paid cash.
+  /// If [amountReceived] is specified, increments existing `finePaid` atomically.
+  /// If [freezeFine] is provided, locks the assessed fine snapshot.
+  Future<void> recordFinePayment({
+    required String transactionId,
+    int? amountReceived,
+    int? newTotalPaid,
+    int? freezeFine,
+  }) async {
+    final docRef = _db
+        .collection(AppConstants.borrowHistoryCollection)
+        .doc(transactionId);
+
+    final Map<String, dynamic> updates = {
+      'lastPaymentDate': Timestamp.now(),
+    };
+
+    if (newTotalPaid != null) {
+      updates['finePaid'] = newTotalPaid;
+    } else if (amountReceived != null) {
+      updates['finePaid'] = FieldValue.increment(amountReceived);
+    }
+
+    if (freezeFine != null && freezeFine > 0) {
+      updates['frozenFine'] = freezeFine;
+    }
+
+    await docRef.update(updates);
   }
 }

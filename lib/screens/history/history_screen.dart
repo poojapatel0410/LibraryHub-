@@ -94,10 +94,13 @@ class _HistoryScreenState extends State<HistoryScreen> {
                         }
 
                         final totalPendingFine = history
-                            .where((h) => h.isOverdue)
-                            .fold<int>(0, (sum, h) => sum + h.overdueFine);
-                        final overdueCount =
-                            history.where((h) => h.isOverdue).length;
+                            .fold<int>(0, (sum, h) => sum + h.remainingFine);
+                        final totalPaidFine = history
+                            .fold<int>(0, (sum, h) => sum + h.finePaid);
+                        final totalAssessedFine = history
+                            .fold<int>(0, (sum, h) => sum + h.totalFine);
+                        final overdueLoansCount =
+                            history.where((h) => h.remainingFine > 0).length;
 
                         return ListView(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
@@ -134,7 +137,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Total Cash Fine Due: ₹$totalPendingFine',
+                                            'Cash Fine Due: ₹$totalPendingFine',
                                             style: GoogleFonts.outfit(
                                               fontSize: 14,
                                               fontWeight: FontWeight.w700,
@@ -143,13 +146,48 @@ class _HistoryScreenState extends State<HistoryScreen> {
                                           ),
                                           const SizedBox(height: 2),
                                           Text(
-                                            '$overdueCount overdue book(s) (₹3/day). Please pay in cash at the library counter upon return.',
+                                            totalPaidFine > 0
+                                                ? 'Total Fee: ₹$totalAssessedFine • Paid in Cash: ₹$totalPaidFine • Remaining: ₹$totalPendingFine'
+                                                : '$overdueLoansCount overdue book(s) (₹3/day). Pay ₹$totalPendingFine cash at counter.',
                                             style: GoogleFonts.outfit(
                                               fontSize: 12,
                                               color: AppTheme.textSecondary,
                                             ),
                                           ),
                                         ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ] else if (totalPaidFine > 0) ...[
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(12),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.success.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: AppTheme.success.withValues(alpha: 0.35),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    const Icon(
+                                      Icons.check_circle_rounded,
+                                      color: AppTheme.success,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Expanded(
+                                      child: Text(
+                                        'All Late Fees Settled (₹$totalPaidFine Paid in Cash ✓)',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppTheme.success,
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -212,29 +250,48 @@ class _BorrowHistoryCard extends StatelessWidget {
                 fontSize: 14,
               ),
             ),
-            if (history.isOverdue) ...[
+            if (history.hasFine) ...[
               const SizedBox(height: 14),
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: AppTheme.error.withValues(alpha: 0.15),
+                  color: (history.remainingFine > 0
+                          ? AppTheme.error
+                          : AppTheme.success)
+                      .withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
-                      color: AppTheme.error.withValues(alpha: 0.4)),
+                      color: (history.remainingFine > 0
+                              ? AppTheme.error
+                              : AppTheme.success)
+                          .withValues(alpha: 0.4)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Row(
                       children: [
-                        const Icon(Icons.warning_amber_rounded,
-                            color: AppTheme.error, size: 18),
+                        Icon(
+                          history.remainingFine > 0
+                              ? Icons.warning_amber_rounded
+                              : Icons.check_circle_rounded,
+                          color: history.remainingFine > 0
+                              ? AppTheme.error
+                              : AppTheme.success,
+                          size: 18,
+                        ),
                         const SizedBox(width: 8),
                         Text(
-                          'Late Return Fine: ₹${history.overdueFine}',
+                          history.remainingFine == 0
+                              ? 'Fine Fully Paid: ₹${history.finePaid} ✓'
+                              : (history.isPartiallyPaid
+                                  ? 'Cash Due: ₹${history.remainingFine} (Fee: ₹${history.totalFine})'
+                                  : 'Late Return Fine: ₹${history.totalFine}'),
                           style: GoogleFonts.outfit(
                             fontWeight: FontWeight.w700,
-                            color: AppTheme.error,
+                            color: history.remainingFine > 0
+                                ? AppTheme.error
+                                : AppTheme.success,
                             fontSize: 13,
                           ),
                         ),
@@ -242,7 +299,11 @@ class _BorrowHistoryCard extends StatelessWidget {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'This book is overdue by ${history.overdueDays} day(s) at ₹3/day. Please pay ₹${history.overdueFine} in CASH to the librarian at the desk when handing over the book.',
+                      history.remainingFine == 0
+                          ? 'All late fees for this loan have been settled in cash.'
+                          : (history.isPartiallyPaid
+                              ? 'Total fee: ₹${history.totalFine}. You paid ₹${history.finePaid} cash. Remaining balance of ₹${history.remainingFine} is still due to the librarian.'
+                              : 'This book is overdue by ${history.overdueDays} day(s) at ₹3/day. Please pay ₹${history.remainingFine} in CASH to the librarian at the desk when handing over the book.'),
                       style: GoogleFonts.outfit(
                         fontSize: 12,
                         color: AppTheme.textPrimary,
@@ -272,7 +333,7 @@ class _BorrowHistoryCard extends StatelessWidget {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              history.isOverdue ? 'Confirm & Return' : 'Return Now',
+              history.remainingFine > 0 ? 'Confirm & Return' : 'Return Now',
               style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
             ),
           ),
@@ -286,6 +347,7 @@ class _BorrowHistoryCard extends StatelessWidget {
       await firestoreService.returnBook(
         transactionId: history.transactionId,
         bookId: history.bookId,
+        currentOverdueFine: history.totalFine,
       );
 
       if (!context.mounted) return;
@@ -299,8 +361,8 @@ class _BorrowHistoryCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  history.isOverdue
-                      ? '"${history.bookTitle}" returned! Please pay ₹${history.overdueFine} cash fine at desk.'
+                  history.remainingFine > 0
+                      ? '"${history.bookTitle}" returned! Remaining ₹${history.remainingFine} cash fine due at desk.'
                       : '"${history.bookTitle}" returned successfully! Catalogue updated.',
                   style: GoogleFonts.outfit(color: AppTheme.textPrimary),
                 ),
@@ -335,16 +397,27 @@ class _BorrowHistoryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = history.isActive;
-    final isOverdue = history.isOverdue;
+    final hasFine = history.hasFine;
+    final totalFine = history.totalFine;
+    final finePaid = history.finePaid;
+    final remainingFine = history.remainingFine;
 
     Color statusColor;
     String statusLabel;
     IconData statusIcon;
 
-    if (isOverdue) {
+    if (remainingFine > 0) {
       statusColor = AppTheme.error;
-      statusLabel = 'Overdue (₹${history.overdueFine} Due)';
+      statusLabel = finePaid > 0
+          ? 'Due: ₹$remainingFine (Paid ₹$finePaid)'
+          : 'Overdue (₹$remainingFine Due)';
       statusIcon = Icons.warning_amber_rounded;
+    } else if (hasFine && history.isFineFullyPaid) {
+      statusColor = AppTheme.success;
+      statusLabel = isActive
+          ? 'Active (Paid ₹$finePaid ✓)'
+          : 'Returned (Paid ₹$finePaid ✓)';
+      statusIcon = Icons.check_circle_outline_rounded;
     } else if (isActive) {
       statusColor = AppTheme.success;
       statusLabel = 'Active';
@@ -415,34 +488,77 @@ class _BorrowHistoryCard extends StatelessWidget {
                     icon: Icons.event_available_outlined,
                     label: 'Due',
                     value: dateFormat.format(history.returnDate),
-                    valueColor: isOverdue ? AppTheme.warning : null,
+                    valueColor: remainingFine > 0 ? AppTheme.warning : null,
                   ),
-                  if (isOverdue) ...[
+                  if (hasFine) ...[
                     const SizedBox(height: 8),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
+                          horizontal: 10, vertical: 8),
                       decoration: BoxDecoration(
-                        color: AppTheme.error.withValues(alpha: 0.12),
+                        color: (remainingFine > 0
+                                ? (finePaid > 0
+                                    ? AppTheme.warning
+                                    : AppTheme.error)
+                                : AppTheme.success)
+                            .withValues(alpha: 0.12),
                         borderRadius: BorderRadius.circular(8),
                         border: Border.all(
-                            color: AppTheme.error.withValues(alpha: 0.3)),
+                          color: (remainingFine > 0
+                                  ? (finePaid > 0
+                                      ? AppTheme.warning
+                                      : AppTheme.error)
+                                  : AppTheme.success)
+                              .withValues(alpha: 0.35),
+                        ),
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.monetization_on_outlined,
-                              color: AppTheme.error, size: 14),
-                          const SizedBox(width: 6),
-                          Expanded(
-                            child: Text(
-                              'Overdue: ${history.overdueDays} day(s) • Fine: ₹${history.overdueFine} (Cash to pay)',
+                          Row(
+                            children: [
+                              Icon(
+                                remainingFine == 0
+                                    ? Icons.check_circle_rounded
+                                    : Icons.payments_rounded,
+                                color: remainingFine > 0
+                                    ? (finePaid > 0
+                                        ? AppTheme.warning
+                                        : AppTheme.error)
+                                    : AppTheme.success,
+                                size: 15,
+                              ),
+                              const SizedBox(width: 6),
+                              Expanded(
+                                child: Text(
+                                  remainingFine == 0
+                                      ? 'Late Fee: ₹$totalFine • Fully Paid in Cash ✓'
+                                      : 'Fee: ₹$totalFine   |   Paid: ₹$finePaid   |   Due: ₹$remainingFine',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: remainingFine > 0
+                                        ? (finePaid > 0
+                                            ? AppTheme.warning
+                                            : AppTheme.error)
+                                        : AppTheme.success,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (remainingFine > 0) ...[
+                            const SizedBox(height: 3),
+                            Text(
+                              finePaid > 0
+                                  ? 'You paid ₹$finePaid in cash. Remaining balance of ₹$remainingFine is still due at the counter.'
+                                  : 'Overdue by ${history.overdueDays} day(s) (₹3/day). Pay ₹$remainingFine cash to librarian.',
                               style: GoogleFonts.outfit(
                                 fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: AppTheme.error,
+                                color: AppTheme.textSecondary,
                               ),
                             ),
-                          ),
+                          ],
                         ],
                       ),
                     ),
