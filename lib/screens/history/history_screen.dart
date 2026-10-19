@@ -93,16 +93,77 @@ class _HistoryScreenState extends State<HistoryScreen> {
                           );
                         }
 
-                        return ListView.builder(
+                        final totalPendingFine = history
+                            .where((h) => h.isOverdue)
+                            .fold<int>(0, (sum, h) => sum + h.overdueFine);
+                        final overdueCount =
+                            history.where((h) => h.isOverdue).length;
+
+                        return ListView(
                           padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
-                          itemCount: history.length,
-                          itemBuilder: (context, index) {
-                            return _BorrowHistoryCard(
-                              history: history[index],
-                              dateFormat: _dateFormat,
-                              firestoreService: _firestoreService,
-                            );
-                          },
+                          children: [
+                            if (totalPendingFine > 0) ...[
+                              Container(
+                                margin: const EdgeInsets.only(bottom: 16),
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: AppTheme.error.withValues(alpha: 0.12),
+                                  borderRadius: BorderRadius.circular(14),
+                                  border: Border.all(
+                                    color: AppTheme.error.withValues(alpha: 0.35),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.all(8),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.error.withValues(alpha: 0.2),
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: const Icon(
+                                        Icons.payments_rounded,
+                                        color: AppTheme.error,
+                                        size: 22,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            'Total Cash Fine Due: ₹$totalPendingFine',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              color: AppTheme.error,
+                                            ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            '$overdueCount overdue book(s) (₹3/day). Please pay in cash at the library counter upon return.',
+                                            style: GoogleFonts.outfit(
+                                              fontSize: 12,
+                                              color: AppTheme.textSecondary,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                            ...history.map(
+                              (item) => _BorrowHistoryCard(
+                                history: item,
+                                dateFormat: _dateFormat,
+                                firestoreService: _firestoreService,
+                              ),
+                            ),
+                          ],
                         );
                       },
                     ),
@@ -140,12 +201,58 @@ class _BorrowHistoryCard extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        content: Text(
-          'Are you sure you want to return "${history.bookTitle}"? This will return 1 copy to the library catalogue.',
-          style: GoogleFonts.outfit(
-            color: AppTheme.textSecondary,
-            fontSize: 14,
-          ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to return "${history.bookTitle}"? This will restore 1 copy to the library catalogue.',
+              style: GoogleFonts.outfit(
+                color: AppTheme.textSecondary,
+                fontSize: 14,
+              ),
+            ),
+            if (history.isOverdue) ...[
+              const SizedBox(height: 14),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.error.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                      color: AppTheme.error.withValues(alpha: 0.4)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        const Icon(Icons.warning_amber_rounded,
+                            color: AppTheme.error, size: 18),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Late Return Fine: ₹${history.overdueFine}',
+                          style: GoogleFonts.outfit(
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.error,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'This book is overdue by ${history.overdueDays} day(s) at ₹3/day. Please pay ₹${history.overdueFine} in CASH to the librarian at the desk when handing over the book.',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ],
         ),
         actions: [
           TextButton(
@@ -165,7 +272,7 @@ class _BorrowHistoryCard extends StatelessWidget {
             ),
             onPressed: () => Navigator.pop(ctx, true),
             child: Text(
-              'Return Now',
+              history.isOverdue ? 'Confirm & Return' : 'Return Now',
               style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
             ),
           ),
@@ -192,7 +299,9 @@ class _BorrowHistoryCard extends StatelessWidget {
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
-                  '"${history.bookTitle}" returned successfully! Catalogue updated.',
+                  history.isOverdue
+                      ? '"${history.bookTitle}" returned! Please pay ₹${history.overdueFine} cash fine at desk.'
+                      : '"${history.bookTitle}" returned successfully! Catalogue updated.',
                   style: GoogleFonts.outfit(color: AppTheme.textPrimary),
                 ),
               ),
@@ -233,8 +342,8 @@ class _BorrowHistoryCard extends StatelessWidget {
     IconData statusIcon;
 
     if (isOverdue) {
-      statusColor = AppTheme.warning;
-      statusLabel = 'Overdue';
+      statusColor = AppTheme.error;
+      statusLabel = 'Overdue (₹${history.overdueFine} Due)';
       statusIcon = Icons.warning_amber_rounded;
     } else if (isActive) {
       statusColor = AppTheme.success;
@@ -308,6 +417,36 @@ class _BorrowHistoryCard extends StatelessWidget {
                     value: dateFormat.format(history.returnDate),
                     valueColor: isOverdue ? AppTheme.warning : null,
                   ),
+                  if (isOverdue) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppTheme.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppTheme.error.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.monetization_on_outlined,
+                              color: AppTheme.error, size: 14),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              'Overdue: ${history.overdueDays} day(s) • Fine: ₹${history.overdueFine} (Cash to pay)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 10),
                   // Status badge and Return Action
                   Row(

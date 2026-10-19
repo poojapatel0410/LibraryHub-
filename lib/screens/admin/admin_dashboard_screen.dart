@@ -311,6 +311,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             final totalStudents = users.length;
             final activeLoans = history.where((h) => h.isActive).length;
             final returnedLoans = history.where((h) => !h.isActive).length;
+            final totalFinesDue = history
+                .where((h) => h.isOverdue)
+                .fold<int>(0, (sum, h) => sum + h.overdueFine);
+            final overdueLoansCount = history.where((h) => h.isOverdue).length;
 
             final filteredUsers = users.where((u) {
               if (_userSearchQuery.isEmpty) return true;
@@ -356,6 +360,67 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       ),
                     ],
                   ),
+
+                  // Cash Fines to Collect Banner (if any overdue)
+                  if (totalFinesDue > 0) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 12),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            AppTheme.error.withValues(alpha: 0.18),
+                            AppTheme.warning.withValues(alpha: 0.12),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: AppTheme.error.withValues(alpha: 0.4),
+                          width: 1.2,
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              color: AppTheme.error.withValues(alpha: 0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.payments_rounded,
+                              color: AppTheme.error,
+                              size: 22,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Cash Fines to Collect: ₹$totalFinesDue',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 15,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.error,
+                                  ),
+                                ),
+                                Text(
+                                  '$overdueLoansCount overdue book(s) across students (₹3/day). Collect in cash at the counter upon book return.',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
 
                   const SizedBox(height: 24),
 
@@ -433,12 +498,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           studentLoans.where((h) => h.isActive).length;
                       final returnedCount =
                           studentLoans.where((h) => !h.isActive).length;
+                      final studentFine = studentLoans
+                          .where((h) => h.isOverdue)
+                          .fold<int>(0, (sum, h) => sum + h.overdueFine);
+                      final studentOverdueCount =
+                          studentLoans.where((h) => h.isOverdue).length;
 
                       return _buildStudentCard(
                         user: user,
                         issuedCount: issuedCount,
                         returnedCount: returnedCount,
                         loans: studentLoans,
+                        studentFine: studentFine,
+                        studentOverdueCount: studentOverdueCount,
                       );
                     }),
                 ],
@@ -500,6 +572,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required int issuedCount,
     required int returnedCount,
     required List<BorrowHistory> loans,
+    required int studentFine,
+    required int studentOverdueCount,
   }) {
     final displayName = user.name.isNotEmpty
         ? user.name
@@ -549,6 +623,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       issuedCount > 0 ? AppTheme.warning : AppTheme.textMuted),
                   const SizedBox(width: 8),
                   _buildLoanBadge('Returned: $returnedCount', AppTheme.success),
+                  if (studentFine > 0) ...[
+                    const SizedBox(width: 8),
+                    _buildLoanBadge('Fine: ₹$studentFine (Cash)', AppTheme.error),
+                  ],
                 ],
               ),
             ],
@@ -567,6 +645,36 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       Icons.school_rounded, 'Education', user.education),
                   _buildUserDetailRow(
                       Icons.location_on_rounded, 'Address', user.address),
+                  if (studentFine > 0) ...[
+                    Container(
+                      margin: const EdgeInsets.symmetric(vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: AppTheme.error.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                            color: AppTheme.error.withValues(alpha: 0.35)),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(Icons.payments_rounded,
+                              color: AppTheme.error, size: 18),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              'Pending Cash Fine: ₹$studentFine ($studentOverdueCount overdue book(s) at ₹3/day)',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.error,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 12),
                   Text(
                     'Borrow Records (${loans.length}):',
@@ -588,51 +696,96 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     )
                   else
                     ...loans.map(
-                      (loan) => Container(
-                        margin: const EdgeInsets.only(bottom: 6),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: AppTheme.bgCardLight,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              loan.isActive
-                                  ? Icons.book_rounded
-                                  : Icons.check_circle_outline,
-                              size: 14,
-                              color: loan.isActive
-                                  ? AppTheme.warning
-                                  : AppTheme.success,
-                            ),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                loan.bookTitle,
-                                style: GoogleFonts.outfit(
-                                  fontSize: 12,
-                                  color: AppTheme.textPrimary,
-                                  fontWeight: FontWeight.w600,
+                      (loan) {
+                        final isOverdue = loan.isOverdue;
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 6),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: isOverdue
+                                ? AppTheme.error.withValues(alpha: 0.08)
+                                : AppTheme.bgCardLight,
+                            borderRadius: BorderRadius.circular(8),
+                            border: isOverdue
+                                ? Border.all(
+                                    color:
+                                        AppTheme.error.withValues(alpha: 0.25))
+                                : null,
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(
+                                isOverdue
+                                    ? Icons.warning_amber_rounded
+                                    : (loan.isActive
+                                        ? Icons.book_rounded
+                                        : Icons.check_circle_outline),
+                                size: 16,
+                                color: isOverdue
+                                    ? AppTheme.error
+                                    : (loan.isActive
+                                        ? AppTheme.warning
+                                        : AppTheme.success),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      loan.bookTitle,
+                                      style: GoogleFonts.outfit(
+                                        fontSize: 12,
+                                        color: AppTheme.textPrimary,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    if (isOverdue)
+                                      Text(
+                                        'Overdue by ${loan.overdueDays} day(s) • ₹3/day',
+                                        style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          color: AppTheme.error,
+                                          fontWeight: FontWeight.w500,
+                                        ),
+                                      ),
+                                  ],
                                 ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            Text(
-                              loan.status,
-                              style: GoogleFonts.outfit(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                                color: loan.isActive
-                                  ? AppTheme.warning
-                                  : AppTheme.success,
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: (isOverdue
+                                          ? AppTheme.error
+                                          : (loan.isActive
+                                              ? AppTheme.warning
+                                              : AppTheme.success))
+                                      .withValues(alpha: 0.15),
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  isOverdue
+                                      ? '₹${loan.overdueFine} Cash'
+                                      : loan.status,
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: isOverdue
+                                        ? AppTheme.error
+                                        : (loan.isActive
+                                            ? AppTheme.warning
+                                            : AppTheme.success),
+                                  ),
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
-                      ),
+                            ],
+                          ),
+                        );
+                      },
                     ),
                 ],
               ),

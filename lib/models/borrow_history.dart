@@ -53,7 +53,21 @@ class BorrowHistory {
   /// Returns true if the return date has passed and book is still active.
   bool get isOverdue => isActive && DateTime.now().isAfter(returnDate);
 
+  /// Overdue fine rate (₹3 per book per day).
+  static const int dailyFineRate = 3;
+
+  /// Number of whole days overdue (minimum 1 day if return date has passed).
+  int get overdueDays {
+    if (!isOverdue) return 0;
+    final diff = DateTime.now().difference(returnDate);
+    final days = diff.inDays;
+    return days > 0 ? days : 1;
+  }
+
+  /// Total overdue fine amount in INR (₹) to be collected in cash.
+  int get overdueFine => overdueDays * dailyFineRate;
+
   @override
   String toString() =>
-      'BorrowHistory(transactionId: $transactionId, bookTitle: $bookTitle, status: $status)';
+      'BorrowHistory(transactionId: $transactionId, bookTitle: $bookTitle, status: $status, fine: ₹$overdueFine)';
 }

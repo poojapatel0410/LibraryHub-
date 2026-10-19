@@ -21,7 +21,7 @@ Everything is pre-configured and connected to a live Cloud Firestore backend. Yo
 > - 👥 Track all registered students (Name, Contact, Education, Address, Registration Email)
 > - 📜 Monitor student loans (See how many books each student has borrowed vs. returned, expand to see details)
 > - 📦 Live Inventory Management (Increase `+` or decrease `-` available book stock)
-> - ➕ Add new books to the catalogue (Title, Author, Copies, Description)
+> - ➕ Add new books to the catalogue (Title, Author, Copies, Description, and Cover Photo directly from Gallery or Web URL)
 
 ---
 
@@ -193,6 +193,17 @@ Here is a recommended testing flow to demonstrate all features:
 2. See the active book loan with its due date and status badge (`Active`).
 3. Tap **"Return Book"** and confirm.
 4. The status turns to **"Returned"**, and 1 copy is instantly restored back to the inventory catalogue!
+
+### Test Case 4: Overdue Book Late Fine (₹3 / day - Cash)
+1. If a student holds an active book past its scheduled due date, it is automatically flagged as **Overdue**.
+2. **Student Side**:
+   - Each overdue book displays an alert: `Overdue by X day(s) • Fine: ₹(X * 3)`.
+   - Top banner aggregates: `Total Cash Fine Due: ₹Total. Please pay in cash at the library desk.`
+   - Return confirmation dialog warns the student to pay the cash fine at the counter when handing in the book.
+3. **Admin Side**:
+   - Top KPI highlights: `Total Cash Fines to Collect: ₹Total`.
+   - Student directory cards display individual fine badges: `Fine: ₹X (Cash)`.
+   - Expanded student records detail overdue days and book-wise cash amounts to collect.
 
 ---
 
