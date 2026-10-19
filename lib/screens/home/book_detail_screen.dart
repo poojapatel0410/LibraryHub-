@@ -478,31 +478,65 @@ class _BookDetailScreenState extends State<BookDetailScreen>
       ),
       child: Stack(
         children: [
-          // Decorative circles
-          Positioned(
-            top: -30,
-            right: -30,
-            child: Container(
-              width: 160,
-              height: 160,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.07),
+          // If image is available, display image cover
+          if (book.hasImage) ...[
+            Positioned.fill(
+              child: Image.network(
+                book.imageUrl,
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const SizedBox.shrink(),
               ),
             ),
-          ),
-          Positioned(
-            bottom: -40,
-            left: -20,
-            child: Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: Colors.white.withValues(alpha: 0.05),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withValues(alpha: 0.4),
+                      Colors.black.withValues(alpha: 0.75),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
               ),
             ),
-          ),
+          ] else ...[
+            // Decorative circles (fallback when no image)
+            Positioned(
+              top: -30,
+              right: -30,
+              child: Container(
+                width: 160,
+                height: 160,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.07),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -40,
+              left: -20,
+              child: Container(
+                width: 120,
+                height: 120,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: Colors.white.withValues(alpha: 0.05),
+                ),
+              ),
+            ),
+            // Book icon
+            Center(
+              child: Icon(
+                Icons.menu_book_rounded,
+                color: Colors.white.withValues(alpha: 0.85),
+                size: 80,
+              ),
+            ),
+          ],
+
           // Back button
           Positioned(
             top: 16,
@@ -512,7 +546,7 @@ class _BookDetailScreenState extends State<BookDetailScreen>
               child: Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: Colors.black.withValues(alpha: 0.25),
+                  color: Colors.black.withValues(alpha: 0.4),
                   borderRadius: BorderRadius.circular(10),
                   border: Border.all(
                       color: Colors.white.withValues(alpha: 0.2), width: 1),
@@ -523,14 +557,6 @@ class _BookDetailScreenState extends State<BookDetailScreen>
                   size: 18,
                 ),
               ),
-            ),
-          ),
-          // Book icon
-          Center(
-            child: Icon(
-              Icons.menu_book_rounded,
-              color: Colors.white.withValues(alpha: 0.85),
-              size: 80,
             ),
           ),
         ],

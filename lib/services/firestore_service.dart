@@ -39,6 +39,7 @@ class FirestoreService {
     required String author,
     required String description,
     required int availableCopies,
+    String imageUrl = '',
   }) async {
     final bookId = _uuid.v4();
     final book = Book(
@@ -47,6 +48,7 @@ class FirestoreService {
       author: author.trim(),
       description: description.trim(),
       availableCopies: availableCopies,
+      imageUrl: imageUrl.trim(),
     );
     await _db
         .collection(AppConstants.booksCollection)

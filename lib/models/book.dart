@@ -5,6 +5,7 @@ class Book {
   final String author;
   final String description;
   final int availableCopies;
+  final String imageUrl;
 
   const Book({
     required this.bookId,
@@ -12,7 +13,14 @@ class Book {
     required this.author,
     required this.description,
     required this.availableCopies,
+    this.imageUrl = '',
   });
+
+  /// True if book has a valid web image URL.
+  bool get hasImage =>
+      imageUrl.trim().isNotEmpty &&
+      (imageUrl.trim().startsWith('http://') ||
+          imageUrl.trim().startsWith('https://'));
 
   /// Creates a [Book] from a Firestore document snapshot map with flexible
   /// key matching to handle common typos like 'auther', 'Author', etc.
@@ -23,6 +31,7 @@ class Book {
       author: _extractAuthor(map),
       description: _extractDescription(map),
       availableCopies: _extractCopies(map),
+      imageUrl: _extractImageUrl(map),
     );
   }
 
@@ -141,6 +150,40 @@ class Book {
     return 0;
   }
 
+  static String _extractImageUrl(Map<String, dynamic> map) {
+    for (final key in [
+      'imageUrl',
+      'image_url',
+      'image',
+      'Image',
+      'coverImage',
+      'cover_image',
+      'cover',
+      'thumbnail',
+      'book_image',
+      'photo',
+    ]) {
+      if (map.containsKey(key) &&
+          map[key] != null &&
+          map[key].toString().trim().isNotEmpty) {
+        return map[key].toString().trim();
+      }
+    }
+    for (final entry in map.entries) {
+      final normalizedKey =
+          entry.key.toLowerCase().replaceAll(RegExp(r'[^a-z]'), '');
+      if (normalizedKey == 'imageurl' ||
+          normalizedKey == 'coverimage' ||
+          normalizedKey == 'bookimage' ||
+          normalizedKey == 'thumbnail') {
+        if (entry.value != null && entry.value.toString().trim().isNotEmpty) {
+          return entry.value.toString().trim();
+        }
+      }
+    }
+    return '';
+  }
+
   /// Converts this [Book] to a Firestore-compatible map.
   Map<String, dynamic> toMap() {
     return {
@@ -149,6 +192,7 @@ class Book {
       'author': author,
       'description': description,
       'availableCopies': availableCopies,
+      'imageUrl': imageUrl,
     };
   }
 
@@ -159,6 +203,7 @@ class Book {
     String? author,
     String? description,
     int? availableCopies,
+    String? imageUrl,
   }) {
     return Book(
       bookId: bookId ?? this.bookId,
@@ -166,10 +211,11 @@ class Book {
       author: author ?? this.author,
       description: description ?? this.description,
       availableCopies: availableCopies ?? this.availableCopies,
+      imageUrl: imageUrl ?? this.imageUrl,
     );
   }
 
   @override
   String toString() =>
-      'Book(bookId: $bookId, title: $title, author: $author, availableCopies: $availableCopies)';
+      'Book(bookId: $bookId, title: $title, author: $author, availableCopies: $availableCopies, imageUrl: $imageUrl)';
 }

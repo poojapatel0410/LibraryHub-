@@ -31,6 +31,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final _authorController = TextEditingController();
   final _copiesController = TextEditingController(text: '5');
   final _descController = TextEditingController();
+  final _imageUrlController = TextEditingController();
   bool _isAddingBook = false;
 
   // Search filter for students
@@ -42,6 +43,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     _authorController.dispose();
     _copiesController.dispose();
     _descController.dispose();
+    _imageUrlController.dispose();
     super.dispose();
   }
 
@@ -58,6 +60,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         author: _authorController.text.trim(),
         description: _descController.text.trim(),
         availableCopies: copies,
+        imageUrl: _imageUrlController.text.trim(),
       );
 
       if (!mounted) return;
@@ -66,6 +69,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _titleController.clear();
         _authorController.clear();
         _descController.clear();
+        _imageUrlController.clear();
         _copiesController.text = '5';
         _currentTab = 1; // Switch to Inventory view
       });
@@ -726,15 +730,35 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 48,
-            height: 62,
-            decoration: BoxDecoration(
-              gradient: AppTheme.primaryGradient,
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: const Icon(Icons.menu_book_rounded,
-                color: Colors.white, size: 24),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: book.hasImage
+                ? Image.network(
+                    book.imageUrl,
+                    width: 48,
+                    height: 64,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Container(
+                      width: 48,
+                      height: 64,
+                      decoration: BoxDecoration(
+                        gradient: AppTheme.primaryGradient,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: const Icon(Icons.menu_book_rounded,
+                          color: Colors.white, size: 24),
+                    ),
+                  )
+                : Container(
+                    width: 48,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(Icons.menu_book_rounded,
+                        color: Colors.white, size: 24),
+                  ),
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -833,6 +857,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   // ===========================================================================
 
   Widget _buildAddBookTab() {
+    final hasEnteredUrl = _imageUrlController.text.trim().isNotEmpty;
+
     return SingleChildScrollView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 28),
       child: Form(
@@ -851,7 +877,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 6),
             Text(
-              'Fill in the book details. Once published, students can immediately discover and borrow it.',
+              'Fill in the book details including image cover, title, author, copies, and description.',
               style: GoogleFonts.outfit(
                 fontSize: 13,
                 color: AppTheme.textSecondary,
@@ -859,7 +885,76 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Book Title
+            // 1. Book Cover Image URL
+            _buildFieldLabel('Book Cover Image (URL)'),
+            const SizedBox(height: 4),
+            Text(
+              'Enter a direct web image link or pick a preset cover below.',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                color: AppTheme.textMuted,
+              ),
+            ),
+            const SizedBox(height: 8),
+            TextFormField(
+              controller: _imageUrlController,
+              style: GoogleFonts.outfit(color: AppTheme.textPrimary),
+              keyboardType: TextInputType.url,
+              onChanged: (_) => setState(() {}),
+              decoration: _inputDecoration(
+                hint: 'https://images.unsplash.com/... or any image link',
+                icon: Icons.image_outlined,
+                suffixIcon: hasEnteredUrl
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded,
+                            size: 18, color: AppTheme.textMuted),
+                        onPressed: () {
+                          _imageUrlController.clear();
+                          setState(() {});
+                        },
+                      )
+                    : null,
+              ),
+            ),
+
+            const SizedBox(height: 10),
+
+            // Quick preset chips
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                _buildPresetChip(
+                  label: '💻 Tech / Code',
+                  url:
+                      'https://images.unsplash.com/photo-1517694712202-14dd9538aa97?w=600&auto=format&fit=crop&q=80',
+                ),
+                _buildPresetChip(
+                  label: '📖 Literature',
+                  url:
+                      'https://images.unsplash.com/photo-1544947950-fa07a98d237f?w=600&auto=format&fit=crop&q=80',
+                ),
+                _buildPresetChip(
+                  label: '🔬 Science',
+                  url:
+                      'https://images.unsplash.com/photo-1532012164546-f432f2e3794b?w=600&auto=format&fit=crop&q=80',
+                ),
+                _buildPresetChip(
+                  label: '💼 Business',
+                  url:
+                      'https://images.unsplash.com/photo-1589829085413-56de8ae18c73?w=600&auto=format&fit=crop&q=80',
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+
+            // Live Cover Preview Box
+            _buildCoverPreviewBox(),
+
+            const SizedBox(height: 20),
+
+            // 2. Book Title
             _buildFieldLabel('Book Title *'),
             const SizedBox(height: 8),
             TextFormField(
@@ -880,7 +975,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             const SizedBox(height: 18),
 
-            // Author Name
+            // 3. Author Name
             _buildFieldLabel('Author Name *'),
             const SizedBox(height: 8),
             TextFormField(
@@ -901,7 +996,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             const SizedBox(height: 18),
 
-            // Available Copies
+            // 4. Available Copies
             _buildFieldLabel('Number of Available Copies *'),
             const SizedBox(height: 8),
             TextFormField(
@@ -923,7 +1018,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             const SizedBox(height: 18),
 
-            // Description
+            // 5. Description
             _buildFieldLabel('Book Description / Summary'),
             const SizedBox(height: 8),
             TextFormField(
@@ -952,6 +1047,155 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     );
   }
 
+  Widget _buildPresetChip({required String label, required String url}) {
+    final isSelected = _imageUrlController.text.trim() == url;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _imageUrlController.text = url;
+        });
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? AppTheme.primary.withValues(alpha: 0.25)
+              : AppTheme.bgCard,
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primary
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+          borderRadius: BorderRadius.circular(20),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? AppTheme.primary : AppTheme.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCoverPreviewBox() {
+    final url = _imageUrlController.text.trim();
+    final isValidUrl = url.startsWith('http://') || url.startsWith('https://');
+
+    if (!isValidUrl) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: AppTheme.bgCard,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.06)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 48,
+              decoration: BoxDecoration(
+                gradient: AppTheme.primaryGradient,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: const Icon(Icons.menu_book_rounded,
+                  color: Colors.white, size: 20),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'No image specified. A gradient cover will be automatically generated.',
+                style: GoogleFonts.outfit(
+                  fontSize: 12,
+                  color: AppTheme.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.primary.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: Image.network(
+              url,
+              width: 60,
+              height: 80,
+              fit: BoxFit.cover,
+              errorBuilder: (_, __, ___) => Container(
+                width: 60,
+                height: 80,
+                color: AppTheme.error.withValues(alpha: 0.15),
+                child: const Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.broken_image_rounded,
+                        color: AppTheme.error, size: 24),
+                    SizedBox(height: 4),
+                    Text(
+                      'Invalid URL',
+                      style: TextStyle(fontSize: 8, color: AppTheme.error),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    const Icon(Icons.check_circle_rounded,
+                        color: AppTheme.success, size: 16),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Live Cover Preview',
+                      style: GoogleFonts.outfit(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  url,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.outfit(
+                    fontSize: 11,
+                    color: AppTheme.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildFieldLabel(String label) {
     return Text(
       label,
@@ -966,10 +1210,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   InputDecoration _inputDecoration({
     required String hint,
     required IconData icon,
+    Widget? suffixIcon,
   }) {
     return InputDecoration(
       hintText: hint,
       prefixIcon: Icon(icon, color: AppTheme.textMuted, size: 20),
+      suffixIcon: suffixIcon,
       filled: true,
       fillColor: AppTheme.bgCard,
       border: OutlineInputBorder(

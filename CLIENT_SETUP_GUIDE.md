@@ -149,7 +149,8 @@ Cloud Firestore
 │         ├── title: String
 │         ├── author: String (or auther)
 │         ├── description: String
-│         └── availableCopies: int
+│         ├── availableCopies: int
+│         └── imageUrl: String
 │
 └── 📁 borrow_history
      └── {transactionId} (document)

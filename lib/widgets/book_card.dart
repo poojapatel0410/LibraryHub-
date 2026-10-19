@@ -103,7 +103,7 @@ class _BookCardState extends State<BookCard>
                   ),
                   child: Stack(
                     children: [
-                      // Decorative circles
+                      // Decorative circles (fallback)
                       Positioned(
                         top: -20,
                         right: -20,
@@ -112,7 +112,7 @@ class _BookCardState extends State<BookCard>
                           height: 90,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.08),
+                            color: Colors.white.withValues(alpha: 0.08),
                           ),
                         ),
                       ),
@@ -124,18 +124,53 @@ class _BookCardState extends State<BookCard>
                           height: 60,
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            color: Colors.white.withOpacity(0.06),
+                            color: Colors.white.withValues(alpha: 0.06),
                           ),
                         ),
                       ),
-                      // Book icon
-                      Center(
-                        child: Icon(
-                          Icons.menu_book_rounded,
-                          color: Colors.white.withOpacity(0.9),
-                          size: 52,
+
+                      // If image is provided, display image with subtle overlay
+                      if (widget.book.hasImage) ...[
+                        Positioned.fill(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(18),
+                            ),
+                            child: Image.network(
+                              widget.book.imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                            ),
+                          ),
                         ),
-                      ),
+                        Positioned.fill(
+                          child: Container(
+                            decoration: BoxDecoration(
+                              borderRadius: const BorderRadius.vertical(
+                                top: Radius.circular(18),
+                              ),
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.transparent,
+                                  Colors.black.withValues(alpha: 0.55),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ] else ...[
+                        // Book icon fallback
+                        Center(
+                          child: Icon(
+                            Icons.menu_book_rounded,
+                            color: Colors.white.withValues(alpha: 0.9),
+                            size: 52,
+                          ),
+                        ),
+                      ],
+
                       // Availability badge
                       Positioned(
                         top: 10,
@@ -147,8 +182,8 @@ class _BookCardState extends State<BookCard>
                           ),
                           decoration: BoxDecoration(
                             color: isAvailable
-                                ? AppTheme.success.withOpacity(0.9)
-                                : AppTheme.error.withOpacity(0.9),
+                                ? AppTheme.success.withValues(alpha: 0.9)
+                                : AppTheme.error.withValues(alpha: 0.9),
                             borderRadius: BorderRadius.circular(20),
                           ),
                           child: Text(

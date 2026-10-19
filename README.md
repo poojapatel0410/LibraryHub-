@@ -139,7 +139,8 @@ Stores library catalogue books:
   "title": "Clean Code",
   "author": "Robert C. Martin",
   "description": "A Handbook of Agile Software Craftsmanship.",
-  "availableCopies": 5
+  "availableCopies": 5,
+  "imageUrl": "https://images.unsplash.com/..."
 }
 ```
 
