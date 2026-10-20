@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -381,6 +382,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           value: '$totalStudents',
                           icon: Icons.groups_rounded,
                           color: AppTheme.primary,
+                          subtitle: 'View All Details →',
+                          onTap: () => _showAllStudentsDialog(users, history),
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -630,21 +633,38 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     required String value,
     required IconData icon,
     required Color color,
+    String? subtitle,
+    VoidCallback? onTap,
   }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+    final cardContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       decoration: BoxDecoration(
         color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: color.withValues(alpha: 0.3),
-          width: 1,
+          color: color.withValues(alpha: onTap != null ? 0.45 : 0.3),
+          width: onTap != null ? 1.3 : 1,
         ),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(icon, color: color, size: 22),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: color, size: 22),
+              if (onTap != null)
+                Container(
+                  padding: const EdgeInsets.all(4),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child:
+                      Icon(Icons.arrow_forward_rounded, color: color, size: 12),
+                ),
+            ],
+          ),
           const SizedBox(height: 10),
           Text(
             value,
@@ -665,6 +685,607 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
           ),
+          if (subtitle != null) ...[
+            const SizedBox(height: 4),
+            Text(
+              subtitle,
+              style: GoogleFonts.outfit(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    if (onTap != null) {
+      return InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: cardContent,
+      );
+    }
+    return cardContent;
+  }
+
+  void _showAllStudentsDialog(
+      List<UserModel> users, List<BorrowHistory> history) {
+    String searchFilter = '';
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            final filtered = users.where((u) {
+              if (searchFilter.isEmpty) return true;
+              final q = searchFilter.toLowerCase();
+              return u.name.toLowerCase().contains(q) ||
+                  u.email.toLowerCase().contains(q) ||
+                  u.uid.toLowerCase().contains(q) ||
+                  u.contact.toLowerCase().contains(q) ||
+                  u.education.toLowerCase().contains(q);
+            }).toList();
+
+            return AlertDialog(
+              backgroundColor: AppTheme.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(22),
+                side: BorderSide(
+                    color: AppTheme.primary.withValues(alpha: 0.35),
+                    width: 1.2),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: AppTheme.primaryGradient,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: const Icon(Icons.groups_rounded,
+                        color: Colors.white, size: 22),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Text(
+                              'All Registered Students',
+                              style: GoogleFonts.outfit(
+                                fontSize: 17,
+                                fontWeight: FontWeight.w800,
+                                color: AppTheme.textPrimary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppTheme.primary.withValues(alpha: 0.2),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Text(
+                                '${users.length}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        Text(
+                          'Full student list with names, IDs, and contact info',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close_rounded,
+                        color: AppTheme.textMuted, size: 20),
+                    onPressed: () => Navigator.pop(dialogCtx),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: 600,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Search bar
+                    TextField(
+                      style: GoogleFonts.outfit(
+                          color: AppTheme.textPrimary, fontSize: 13),
+                      decoration: InputDecoration(
+                        hintText: 'Search by student name, ID, or email...',
+                        hintStyle: GoogleFonts.outfit(
+                            color: AppTheme.textMuted, fontSize: 12),
+                        prefixIcon: const Icon(Icons.search_rounded,
+                            size: 18, color: AppTheme.textMuted),
+                        suffixIcon: searchFilter.isNotEmpty
+                            ? IconButton(
+                                icon: const Icon(Icons.clear_rounded,
+                                    size: 16, color: AppTheme.textMuted),
+                                onPressed: () {
+                                  setDialogState(() => searchFilter = '');
+                                },
+                              )
+                            : null,
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 10),
+                        filled: true,
+                        fillColor: AppTheme.bgCardLight,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.08)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                              color: Colors.white.withValues(alpha: 0.08)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: const BorderSide(
+                              color: AppTheme.primary, width: 1.5),
+                        ),
+                      ),
+                      onChanged: (val) {
+                        setDialogState(() => searchFilter = val);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Student list
+                    Flexible(
+                      child: filtered.isEmpty
+                          ? Container(
+                              padding: const EdgeInsets.all(32),
+                              alignment: Alignment.center,
+                              child: Text(
+                                searchFilter.isEmpty
+                                    ? 'No students enrolled yet.'
+                                    : 'No student matches "$searchFilter"',
+                                style: GoogleFonts.outfit(
+                                    color: AppTheme.textMuted),
+                              ),
+                            )
+                          : ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: filtered.length,
+                              itemBuilder: (context, index) {
+                                final student = filtered[index];
+                                final studentName = student.name.isNotEmpty
+                                    ? student.name
+                                    : 'Unknown Name';
+                                final initial = studentName.isNotEmpty
+                                    ? studentName[0].toUpperCase()
+                                    : 'S';
+
+                                final studentLoans = history
+                                    .where((h) => h.userId == student.uid)
+                                    .toList();
+                                final activeCount = studentLoans
+                                    .where((h) => h.isActive)
+                                    .length;
+                                final returnedCount = studentLoans
+                                    .where((h) => !h.isActive)
+                                    .length;
+
+                                return Container(
+                                  margin: const EdgeInsets.only(bottom: 10),
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.bgCardLight,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color:
+                                          Colors.white.withValues(alpha: 0.06),
+                                    ),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      // Top Row: Avatar, Name, Email, Loan status
+                                      Row(
+                                        children: [
+                                          CircleAvatar(
+                                            radius: 18,
+                                            backgroundColor: AppTheme.primary
+                                                .withValues(alpha: 0.25),
+                                            child: Text(
+                                              initial,
+                                              style: GoogleFonts.outfit(
+                                                fontWeight: FontWeight.w800,
+                                                color: AppTheme.primary,
+                                                fontSize: 14,
+                                              ),
+                                            ),
+                                          ),
+                                          const SizedBox(width: 10),
+                                          Expanded(
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Row(
+                                                  children: [
+                                                    Flexible(
+                                                      child: Text(
+                                                        studentName,
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          fontSize: 14,
+                                                          color: AppTheme
+                                                              .textPrimary,
+                                                        ),
+                                                        maxLines: 1,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                    const SizedBox(width: 6),
+                                                    Container(
+                                                      padding: const EdgeInsets
+                                                          .symmetric(
+                                                          horizontal: 6,
+                                                          vertical: 1.5),
+                                                      decoration: BoxDecoration(
+                                                        color: AppTheme.accent
+                                                            .withValues(
+                                                                alpha: 0.15),
+                                                        borderRadius:
+                                                            BorderRadius
+                                                                .circular(4),
+                                                      ),
+                                                      child: Text(
+                                                        'Student #${index + 1}',
+                                                        style:
+                                                            GoogleFonts.outfit(
+                                                          fontSize: 9,
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                          color:
+                                                              AppTheme.accent,
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                                Text(
+                                                  student.email,
+                                                  style: GoogleFonts.outfit(
+                                                    fontSize: 11,
+                                                    color:
+                                                        AppTheme.textSecondary,
+                                                  ),
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                          // Loan tags
+                                          Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.end,
+                                            children: [
+                                              Text(
+                                                '$activeCount active loan(s)',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: activeCount > 0
+                                                      ? AppTheme.warning
+                                                      : AppTheme.textMuted,
+                                                ),
+                                              ),
+                                              Text(
+                                                '$returnedCount returned',
+                                                style: GoogleFonts.outfit(
+                                                  fontSize: 10,
+                                                  color: AppTheme.success,
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ],
+                                      ),
+
+                                      const SizedBox(height: 10),
+
+                                      // Student ID Box with 1-click Copy Button
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                            horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black
+                                              .withValues(alpha: 0.3),
+                                          borderRadius:
+                                              BorderRadius.circular(8),
+                                          border: Border.all(
+                                            color: AppTheme.primary
+                                                .withValues(alpha: 0.25),
+                                          ),
+                                        ),
+                                        child: Row(
+                                          children: [
+                                            const Icon(
+                                                Icons.fingerprint_rounded,
+                                                size: 14,
+                                                color: AppTheme.primary),
+                                            const SizedBox(width: 6),
+                                            Text(
+                                              'Student ID: ',
+                                              style: GoogleFonts.outfit(
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w700,
+                                                color: AppTheme.textMuted,
+                                              ),
+                                            ),
+                                            Expanded(
+                                              child: SelectableText(
+                                                student.uid,
+                                                style:
+                                                    GoogleFonts.sourceCodePro(
+                                                  fontSize: 11,
+                                                  fontWeight: FontWeight.w600,
+                                                  color: AppTheme.primary,
+                                                ),
+                                              ),
+                                            ),
+                                            InkWell(
+                                              onTap: () {
+                                                Clipboard.setData(ClipboardData(
+                                                    text: student.uid));
+                                                ScaffoldMessenger.of(context)
+                                                    .showSnackBar(
+                                                  SnackBar(
+                                                    content: Text(
+                                                        'Copied ID for "$studentName": ${student.uid}'),
+                                                    duration: const Duration(
+                                                        seconds: 2),
+                                                    behavior: SnackBarBehavior
+                                                        .floating,
+                                                    shape:
+                                                        RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              8),
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                              borderRadius:
+                                                  BorderRadius.circular(6),
+                                              child: Container(
+                                                padding: const EdgeInsets
+                                                    .symmetric(
+                                                    horizontal: 6, vertical: 3),
+                                                decoration: BoxDecoration(
+                                                  color: AppTheme.primary
+                                                      .withValues(alpha: 0.15),
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    const Icon(
+                                                        Icons.copy_rounded,
+                                                        size: 11,
+                                                        color:
+                                                            AppTheme.primary),
+                                                    const SizedBox(width: 4),
+                                                    Text(
+                                                      'Copy ID',
+                                                      style: GoogleFonts.outfit(
+                                                        fontSize: 10,
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        color:
+                                                            AppTheme.primary,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+
+                                      // Additional profile info if present
+                                      if (student.contact.isNotEmpty ||
+                                          student.education.isNotEmpty ||
+                                          student.address.isNotEmpty) ...[
+                                        const SizedBox(height: 8),
+                                        Wrap(
+                                          spacing: 12,
+                                          runSpacing: 4,
+                                          children: [
+                                            if (student.contact.isNotEmpty)
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.phone_rounded,
+                                                      size: 11,
+                                                      color:
+                                                          AppTheme.textMuted),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    student.contact,
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            if (student.education.isNotEmpty)
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.school_rounded,
+                                                      size: 11,
+                                                      color:
+                                                          AppTheme.textMuted),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    student.education,
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                    ),
+                                                  ),
+                                                ],
+                                              ),
+                                            if (student.address.isNotEmpty)
+                                              Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Icon(
+                                                      Icons.location_on_rounded,
+                                                      size: 11,
+                                                      color:
+                                                          AppTheme.textMuted),
+                                                  const SizedBox(width: 4),
+                                                  Text(
+                                                    student.address,
+                                                    style: GoogleFonts.outfit(
+                                                      fontSize: 11,
+                                                      color: AppTheme
+                                                          .textSecondary,
+                                                    ),
+                                                    maxLines: 1,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
+                                                ],
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 20, vertical: 10),
+                  ),
+                  onPressed: () => Navigator.pop(dialogCtx),
+                  child: Text(
+                    'Close',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildUserIdRow(String uid, String studentName) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 3),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          const Icon(Icons.fingerprint_rounded,
+              size: 14, color: AppTheme.primary),
+          const SizedBox(width: 8),
+          Text(
+            'Student ID: ',
+            style: GoogleFonts.outfit(
+              fontSize: 12,
+              color: AppTheme.textMuted,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.25),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+              ),
+              child: SelectableText(
+                uid.isNotEmpty ? uid : 'Not assigned',
+                style: GoogleFonts.sourceCodePro(
+                  fontSize: 11,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ),
+          if (uid.isNotEmpty) ...[
+            const SizedBox(width: 6),
+            IconButton(
+              icon: const Icon(Icons.copy_rounded,
+                  size: 14, color: AppTheme.textMuted),
+              tooltip: 'Copy Student ID',
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(),
+              onPressed: () {
+                Clipboard.setData(ClipboardData(text: uid));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: Text('Copied ID for "$studentName": $uid'),
+                    duration: const Duration(seconds: 2),
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -706,13 +1327,39 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
               style: GoogleFonts.outfit(fontWeight: FontWeight.w700),
             ),
           ),
-          title: Text(
-            displayName,
-            style: GoogleFonts.outfit(
-              fontWeight: FontWeight.w700,
-              color: AppTheme.textPrimary,
-              fontSize: 15,
-            ),
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  displayName,
+                  style: GoogleFonts.outfit(
+                    fontWeight: FontWeight.w700,
+                    color: AppTheme.textPrimary,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              if (user.uid.isNotEmpty)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: Text(
+                    'ID: ${user.uid.length > 8 ? "${user.uid.substring(0, 8)}..." : user.uid}',
+                    style: GoogleFonts.sourceCodePro(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+            ],
           ),
           subtitle: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -748,6 +1395,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 children: [
                   const Divider(color: Colors.white12),
                   const SizedBox(height: 6),
+                  _buildUserIdRow(user.uid, displayName),
                   _buildUserDetailRow(
                       Icons.phone_android_rounded, 'Contact', user.contact),
                   _buildUserDetailRow(
