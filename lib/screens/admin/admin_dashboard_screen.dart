@@ -686,15 +686,19 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
-      decoration: BoxDecoration(
+      child: Material(
         color: AppTheme.bgCard,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.05)),
-      ),
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: Colors.white.withValues(alpha: 0.05)),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Theme(
+          data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+          child: ExpansionTile(
+            tilePadding:
+                const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           leading: CircleAvatar(
             backgroundColor: AppTheme.primary.withValues(alpha: 0.2),
             foregroundColor: AppTheme.primary,
@@ -997,7 +1001,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ],
         ),
       ),
-    );
+    ),
+  );
   }
 
   void _showManageCashDialog(BorrowHistory loan, UserModel user) {
@@ -3148,11 +3153,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             // Secondary Option: Enter Web Link or Presets
             Theme(
-              data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-              child: ExpansionTile(
-                tilePadding: EdgeInsets.zero,
-                collapsedIconColor: AppTheme.textMuted,
-                iconColor: AppTheme.primary,
+              data:
+                  Theme.of(context).copyWith(dividerColor: Colors.transparent),
+              child: Material(
+                color: Colors.transparent,
+                child: ExpansionTile(
+                  tilePadding: EdgeInsets.zero,
+                  collapsedIconColor: AppTheme.textMuted,
+                  iconColor: AppTheme.primary,
                 title: Text(
                   'Or use Web Image Link / Presets',
                   style: GoogleFonts.outfit(
@@ -3218,6 +3226,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 ],
               ),
             ),
+          ),
 
             const SizedBox(height: 16),
 
