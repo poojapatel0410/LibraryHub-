@@ -715,6 +715,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   void _showAllStudentsDialog(
       List<UserModel> users, List<BorrowHistory> history) {
     String searchFilter = '';
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     showDialog(
       context: context,
@@ -733,45 +735,53 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
             return AlertDialog(
               backgroundColor: AppTheme.bgCard,
+              insetPadding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 20),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(22),
                 side: BorderSide(
                     color: AppTheme.primary.withValues(alpha: 0.35),
                     width: 1.2),
               ),
+              titlePadding: const EdgeInsets.fromLTRB(16, 16, 12, 10),
               title: Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.all(10),
+                    padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
                       gradient: AppTheme.primaryGradient,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Icon(Icons.groups_rounded,
-                        color: Colors.white, size: 22),
+                        color: Colors.white, size: 20),
                   ),
-                  const SizedBox(width: 12),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
                         Row(
                           children: [
-                            Text(
-                              'All Registered Students',
-                              style: GoogleFonts.outfit(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w800,
-                                color: AppTheme.textPrimary,
+                            Flexible(
+                              child: Text(
+                                'All Registered Students',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                            const SizedBox(width: 8),
+                            const SizedBox(width: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
-                                  horizontal: 8, vertical: 2),
+                                  horizontal: 6, vertical: 1.5),
                               decoration: BoxDecoration(
                                 color: AppTheme.primary.withValues(alpha: 0.2),
-                                borderRadius: BorderRadius.circular(10),
+                                borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(
                                 '${users.length}',
@@ -784,12 +794,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ),
                           ],
                         ),
+                        const SizedBox(height: 2),
                         Text(
-                          'Full student list with names, IDs, and contact info',
+                          'Full student list with names, IDs, and loans',
                           style: GoogleFonts.outfit(
                             fontSize: 11,
                             color: AppTheme.textMuted,
                           ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
                         ),
                       ],
                     ),
@@ -797,21 +810,25 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   IconButton(
                     icon: const Icon(Icons.close_rounded,
                         color: AppTheme.textMuted, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
                     onPressed: () => Navigator.pop(dialogCtx),
                   ),
                 ],
               ),
+              contentPadding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
               content: SizedBox(
-                width: 600,
+                width: screenWidth > 640 ? 560 : (screenWidth - 28),
+                height: screenHeight * 0.72,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   children: [
                     // Search bar
                     TextField(
                       style: GoogleFonts.outfit(
                           color: AppTheme.textPrimary, fontSize: 13),
                       decoration: InputDecoration(
-                        hintText: 'Search by student name, ID, or email...',
+                        hintText: 'Search by student name, ID, email...',
                         hintStyle: GoogleFonts.outfit(
                             color: AppTheme.textMuted, fontSize: 12),
                         prefixIcon: const Icon(Icons.search_rounded,
@@ -853,7 +870,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                     const SizedBox(height: 12),
 
                     // Student list
-                    Flexible(
+                    Expanded(
                       child: filtered.isEmpty
                           ? Container(
                               padding: const EdgeInsets.all(32),
@@ -867,7 +884,6 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ),
                             )
                           : ListView.builder(
-                              shrinkWrap: true,
                               itemCount: filtered.length,
                               itemBuilder: (context, index) {
                                 final student = filtered[index];
@@ -905,9 +921,11 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                     children: [
                                       // Top Row: Avatar, Name, Email, Loan status
                                       Row(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
                                           CircleAvatar(
-                                            radius: 18,
+                                            radius: 17,
                                             backgroundColor: AppTheme.primary
                                                 .withValues(alpha: 0.25),
                                             child: Text(
@@ -915,39 +933,37 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               style: GoogleFonts.outfit(
                                                 fontWeight: FontWeight.w800,
                                                 color: AppTheme.primary,
-                                                fontSize: 14,
+                                                fontSize: 13,
                                               ),
                                             ),
                                           ),
-                                          const SizedBox(width: 10),
+                                          const SizedBox(width: 8),
                                           Expanded(
                                             child: Column(
                                               crossAxisAlignment:
                                                   CrossAxisAlignment.start,
                                               children: [
-                                                Row(
+                                                Wrap(
+                                                  crossAxisAlignment:
+                                                      WrapCrossAlignment.center,
+                                                  spacing: 6,
+                                                  runSpacing: 2,
                                                   children: [
-                                                    Flexible(
-                                                      child: Text(
-                                                        studentName,
-                                                        style:
-                                                            GoogleFonts.outfit(
-                                                          fontWeight:
-                                                              FontWeight.w700,
-                                                          fontSize: 14,
-                                                          color: AppTheme
-                                                              .textPrimary,
-                                                        ),
-                                                        maxLines: 1,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
+                                                    Text(
+                                                      studentName,
+                                                      style:
+                                                          GoogleFonts.outfit(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                        fontSize: 14,
+                                                        color: AppTheme
+                                                            .textPrimary,
                                                       ),
                                                     ),
-                                                    const SizedBox(width: 6),
                                                     Container(
                                                       padding: const EdgeInsets
                                                           .symmetric(
-                                                          horizontal: 6,
+                                                          horizontal: 5,
                                                           vertical: 1.5),
                                                       decoration: BoxDecoration(
                                                         color: AppTheme.accent
@@ -958,7 +974,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                                 .circular(4),
                                                       ),
                                                       child: Text(
-                                                        'Student #${index + 1}',
+                                                        '#${index + 1}',
                                                         style:
                                                             GoogleFonts.outfit(
                                                           fontSize: 9,
@@ -971,6 +987,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                     ),
                                                   ],
                                                 ),
+                                                const SizedBox(height: 1),
                                                 Text(
                                                   student.email,
                                                   style: GoogleFonts.outfit(
@@ -985,13 +1002,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                               ],
                                             ),
                                           ),
+                                          const SizedBox(width: 6),
                                           // Loan tags
                                           Column(
                                             crossAxisAlignment:
                                                 CrossAxisAlignment.end,
                                             children: [
                                               Text(
-                                                '$activeCount active loan(s)',
+                                                '$activeCount active',
                                                 style: GoogleFonts.outfit(
                                                   fontSize: 10,
                                                   fontWeight: FontWeight.w600,
@@ -1012,15 +1030,15 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                         ],
                                       ),
 
-                                      const SizedBox(height: 10),
+                                      const SizedBox(height: 8),
 
                                       // Student ID Box with 1-click Copy Button
                                       Container(
                                         padding: const EdgeInsets.symmetric(
-                                            horizontal: 10, vertical: 6),
+                                            horizontal: 10, vertical: 7),
                                         decoration: BoxDecoration(
                                           color: Colors.black
-                                              .withValues(alpha: 0.3),
+                                              .withValues(alpha: 0.35),
                                           borderRadius:
                                               BorderRadius.circular(8),
                                           border: Border.all(
@@ -1028,88 +1046,118 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                                 .withValues(alpha: 0.25),
                                           ),
                                         ),
-                                        child: Row(
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
                                           children: [
-                                            const Icon(
-                                                Icons.fingerprint_rounded,
-                                                size: 14,
-                                                color: AppTheme.primary),
-                                            const SizedBox(width: 6),
-                                            Text(
-                                              'Student ID: ',
-                                              style: GoogleFonts.outfit(
-                                                fontSize: 11,
-                                                fontWeight: FontWeight.w700,
-                                                color: AppTheme.textMuted,
-                                              ),
-                                            ),
-                                            Expanded(
-                                              child: SelectableText(
-                                                student.uid,
-                                                style:
-                                                    GoogleFonts.sourceCodePro(
-                                                  fontSize: 11,
-                                                  fontWeight: FontWeight.w600,
-                                                  color: AppTheme.primary,
-                                                ),
-                                              ),
-                                            ),
-                                            InkWell(
-                                              onTap: () {
-                                                Clipboard.setData(ClipboardData(
-                                                    text: student.uid));
-                                                ScaffoldMessenger.of(context)
-                                                    .showSnackBar(
-                                                  SnackBar(
-                                                    content: Text(
-                                                        'Copied ID for "$studentName": ${student.uid}'),
-                                                    duration: const Duration(
-                                                        seconds: 2),
-                                                    behavior: SnackBarBehavior
-                                                        .floating,
-                                                    shape:
-                                                        RoundedRectangleBorder(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                              8),
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              borderRadius:
-                                                  BorderRadius.circular(6),
-                                              child: Container(
-                                                padding: const EdgeInsets
-                                                    .symmetric(
-                                                    horizontal: 6, vertical: 3),
-                                                decoration: BoxDecoration(
-                                                  color: AppTheme.primary
-                                                      .withValues(alpha: 0.15),
-                                                  borderRadius:
-                                                      BorderRadius.circular(4),
-                                                ),
-                                                child: Row(
+                                            Row(
+                                              mainAxisAlignment:
+                                                  MainAxisAlignment
+                                                      .spaceBetween,
+                                              children: [
+                                                Row(
                                                   mainAxisSize:
                                                       MainAxisSize.min,
                                                   children: [
                                                     const Icon(
-                                                        Icons.copy_rounded,
-                                                        size: 11,
+                                                        Icons
+                                                            .fingerprint_rounded,
+                                                        size: 13,
                                                         color:
                                                             AppTheme.primary),
-                                                    const SizedBox(width: 4),
+                                                    const SizedBox(width: 5),
                                                     Text(
-                                                      'Copy ID',
+                                                      'STUDENT ID',
                                                       style: GoogleFonts.outfit(
                                                         fontSize: 10,
                                                         fontWeight:
                                                             FontWeight.w700,
+                                                        letterSpacing: 0.5,
                                                         color:
-                                                            AppTheme.primary,
+                                                            AppTheme.textMuted,
                                                       ),
                                                     ),
                                                   ],
                                                 ),
+                                                InkWell(
+                                                  onTap: () {
+                                                    Clipboard.setData(
+                                                        ClipboardData(
+                                                            text: student.uid));
+                                                    ScaffoldMessenger.of(
+                                                            context)
+                                                        .showSnackBar(
+                                                      SnackBar(
+                                                        content: Text(
+                                                            'Copied ID for "$studentName": ${student.uid}'),
+                                                        duration:
+                                                            const Duration(
+                                                                seconds: 2),
+                                                        behavior:
+                                                            SnackBarBehavior
+                                                                .floating,
+                                                        shape:
+                                                            RoundedRectangleBorder(
+                                                          borderRadius:
+                                                              BorderRadius
+                                                                  .circular(8),
+                                                        ),
+                                                      ),
+                                                    );
+                                                  },
+                                                  borderRadius:
+                                                      BorderRadius.circular(4),
+                                                  child: Container(
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                        horizontal: 7,
+                                                        vertical: 2.5),
+                                                    decoration: BoxDecoration(
+                                                      color: AppTheme.primary
+                                                          .withValues(
+                                                              alpha: 0.18),
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                              4),
+                                                    ),
+                                                    child: Row(
+                                                      mainAxisSize:
+                                                          MainAxisSize.min,
+                                                      children: [
+                                                        const Icon(
+                                                            Icons.copy_rounded,
+                                                            size: 11,
+                                                            color: AppTheme
+                                                                .primary),
+                                                        const SizedBox(
+                                                            width: 4),
+                                                        Text(
+                                                          'Copy ID',
+                                                          style: GoogleFonts
+                                                              .outfit(
+                                                            fontSize: 10,
+                                                            fontWeight:
+                                                                FontWeight.w700,
+                                                            color: AppTheme
+                                                                .primary,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: 4),
+                                            SelectableText(
+                                              student.uid.isNotEmpty
+                                                  ? student.uid
+                                                  : 'Not assigned',
+                                              style: GoogleFonts.sourceCodePro(
+                                                fontSize: 11.5,
+                                                fontWeight: FontWeight.w600,
+                                                color: AppTheme.primary,
+                                                letterSpacing: 0.4,
                                               ),
                                             ),
                                           ],
@@ -1228,64 +1276,90 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   Widget _buildUserIdRow(String uid, String studentName) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 3),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.black.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Icon(Icons.fingerprint_rounded,
-              size: 14, color: AppTheme.primary),
-          const SizedBox(width: 8),
-          Text(
-            'Student ID: ',
-            style: GoogleFonts.outfit(
-              fontSize: 12,
-              color: AppTheme.textMuted,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-          Expanded(
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.25),
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
-              ),
-              child: SelectableText(
-                uid.isNotEmpty ? uid : 'Not assigned',
-                style: GoogleFonts.sourceCodePro(
-                  fontSize: 11,
-                  color: AppTheme.primary,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ),
-          if (uid.isNotEmpty) ...[
-            const SizedBox(width: 6),
-            IconButton(
-              icon: const Icon(Icons.copy_rounded,
-                  size: 14, color: AppTheme.textMuted),
-              tooltip: 'Copy Student ID',
-              visualDensity: VisualDensity.compact,
-              padding: EdgeInsets.zero,
-              constraints: const BoxConstraints(),
-              onPressed: () {
-                Clipboard.setData(ClipboardData(text: uid));
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text('Copied ID for "$studentName": $uid'),
-                    duration: const Duration(seconds: 2),
-                    behavior: SnackBarBehavior.floating,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.fingerprint_rounded,
+                      size: 13, color: AppTheme.primary),
+                  const SizedBox(width: 5),
+                  Text(
+                    'STUDENT ID',
+                    style: GoogleFonts.outfit(
+                      fontSize: 10,
+                      fontWeight: FontWeight.w700,
+                      letterSpacing: 0.5,
+                      color: AppTheme.textMuted,
                     ),
                   ),
-                );
-              },
+                ],
+              ),
+              if (uid.isNotEmpty)
+                InkWell(
+                  onTap: () {
+                    Clipboard.setData(ClipboardData(text: uid));
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Copied ID for "$studentName": $uid'),
+                        duration: const Duration(seconds: 2),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    );
+                  },
+                  borderRadius: BorderRadius.circular(4),
+                  child: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.copy_rounded,
+                            size: 11, color: AppTheme.primary),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Copy ID',
+                          style: GoogleFonts.outfit(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: AppTheme.primary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          SelectableText(
+            uid.isNotEmpty ? uid : 'Not assigned',
+            style: GoogleFonts.sourceCodePro(
+              fontSize: 11.5,
+              color: AppTheme.primary,
+              fontWeight: FontWeight.w600,
+              letterSpacing: 0.4,
             ),
-          ],
+          ),
         ],
       ),
     );
