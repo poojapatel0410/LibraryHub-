@@ -29,6 +29,7 @@ Everything is pre-configured and connected to a live Cloud Firestore backend. Yo
 
 ### 🎓 Student User Access (Borrow & Return Books)
 * **Registration**: Any student can create an account using their email and password by clicking **"Create Account"** on the Sign-In screen.
+* **Mandatory Terms & Overdue Fine Agreement**: Before an account can be registered, students must tick the mandatory checkbox agreeing to the Library Terms & Conditions and acknowledging the overdue fine policy (**₹3 per book per day**, payable in cash at the circulation desk). Without accepting these terms, account creation is blocked.
 * **Profile Verification Rule**: Students **must complete their profile** (Contact Number, Education, and Address) before they are allowed to borrow books. If incomplete, the system will prompt them with a 1-click shortcut to complete it.
 * **Borrowing**: Select a book, choose the return due date from the calendar, and confirm.
 * **My Books**: Students can track their borrowed books and return them with a single click.
