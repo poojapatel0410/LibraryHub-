@@ -26,7 +26,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
-  int _currentTab = 0; // 0: Students & Activity, 1: Book Inventory, 2: Add Book
+  int _currentTab = 0; // 0: Students & Activity, 1: Pending Fines, 2: Book Inventory, 3: Add Book
 
   // Add Book Form Controllers
   final _addBookFormKey = GlobalKey<FormState>();
@@ -41,6 +41,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
   // Search filter for students
   String _userSearchQuery = '';
+  // Search filter for pending fines section
+  String _pendingFinesSearchQuery = '';
 
   @override
   void dispose() {
@@ -109,7 +111,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _imageUrlController.clear();
         _pickedImageName = null;
         _copiesController.text = '5';
-        _currentTab = 1; // Switch to Inventory view
+        _currentTab = 2; // Switch to Inventory view
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -158,6 +160,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   index: _currentTab,
                   children: [
                     _buildStudentsAndActivityTab(),
+                    _buildPendingFinesTab(),
                     _buildInventoryTab(),
                     _buildAddBookTab(),
                   ],
@@ -263,30 +266,64 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
       child: BottomNavigationBar(
         currentIndex: _currentTab,
         onTap: (index) => setState(() => _currentTab = index),
+        type: BottomNavigationBarType.fixed,
         backgroundColor: Colors.transparent,
         elevation: 0,
         selectedItemColor: AppTheme.primary,
         unselectedItemColor: AppTheme.textMuted,
         selectedLabelStyle: GoogleFonts.outfit(
-          fontSize: 12,
+          fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
-        unselectedLabelStyle: GoogleFonts.outfit(fontSize: 12),
-        items: const [
-          BottomNavigationBarItem(
+        unselectedLabelStyle: GoogleFonts.outfit(fontSize: 11),
+        items: [
+          const BottomNavigationBarItem(
             icon: Icon(Icons.people_alt_outlined),
             activeIcon: Icon(Icons.people_alt_rounded),
-            label: 'Students & Loans',
+            label: 'Students',
           ),
           BottomNavigationBarItem(
+            icon: StreamBuilder<List<BorrowHistory>>(
+              stream: _firestoreService.allBorrowHistoryStream(),
+              builder: (context, snapshot) {
+                final history = snapshot.data ?? [];
+                final count = history.where((h) => h.remainingFine > 0).length;
+                if (count > 0) {
+                  return Badge(
+                    label: Text('$count'),
+                    backgroundColor: AppTheme.error,
+                    child: const Icon(Icons.payments_outlined),
+                  );
+                }
+                return const Icon(Icons.payments_outlined);
+              },
+            ),
+            activeIcon: StreamBuilder<List<BorrowHistory>>(
+              stream: _firestoreService.allBorrowHistoryStream(),
+              builder: (context, snapshot) {
+                final history = snapshot.data ?? [];
+                final count = history.where((h) => h.remainingFine > 0).length;
+                if (count > 0) {
+                  return Badge(
+                    label: Text('$count'),
+                    backgroundColor: AppTheme.error,
+                    child: const Icon(Icons.payments_rounded),
+                  );
+                }
+                return const Icon(Icons.payments_rounded);
+              },
+            ),
+            label: 'Pending Fines',
+          ),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2_outlined),
             activeIcon: Icon(Icons.inventory_2_rounded),
-            label: 'Book Inventory',
+            label: 'Inventory',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.add_circle_outline_rounded),
             activeIcon: Icon(Icons.add_circle_rounded),
-            label: 'Add New Book',
+            label: 'Add Book',
           ),
         ],
       ),
@@ -451,6 +488,32 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               ],
                             ),
                           ),
+                          if (totalFinesPending > 0) ...[
+                            const SizedBox(width: 8),
+                            TextButton.icon(
+                              style: TextButton.styleFrom(
+                                backgroundColor:
+                                    AppTheme.error.withValues(alpha: 0.15),
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 8, vertical: 6),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              icon: const Icon(Icons.arrow_forward_rounded,
+                                  size: 13, color: AppTheme.error),
+                              label: Text(
+                                'View Section',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.error,
+                                ),
+                              ),
+                              onPressed: () =>
+                                  setState(() => _currentTab = 1),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -1544,6 +1607,639 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ===========================================================================
+  // TAB 1: Pending Fines (Dedicated Cash Fine Recovery Section)
+  // ===========================================================================
+
+  Widget _buildPendingFinesTab() {
+    return StreamBuilder<List<UserModel>>(
+      stream: _firestoreService.usersStream(),
+      builder: (context, userSnapshot) {
+        return StreamBuilder<List<BorrowHistory>>(
+          stream: _firestoreService.allBorrowHistoryStream(),
+          builder: (context, historySnapshot) {
+            if (userSnapshot.connectionState == ConnectionState.waiting ||
+                historySnapshot.connectionState == ConnectionState.waiting) {
+              return const Center(
+                child: CircularProgressIndicator(color: AppTheme.primary),
+              );
+            }
+
+            final users = userSnapshot.data ?? [];
+            final history = historySnapshot.data ?? [];
+
+            // Group all unsettled fines (remainingFine > 0)
+            final pendingLoans =
+                history.where((h) => h.remainingFine > 0).toList();
+
+            final totalPendingFines =
+                pendingLoans.fold<int>(0, (sum, h) => sum + h.remainingFine);
+            final totalCashCollected =
+                history.fold<int>(0, (sum, h) => sum + h.finePaid);
+            final totalAssessedFines = history
+                .where((h) => h.hasFine)
+                .fold<int>(0, (sum, h) => sum + h.totalFine);
+
+            final userMap = {for (final u in users) u.uid: u};
+
+            // Group pending loans by student userId
+            final Map<String, List<BorrowHistory>> studentPendingLoans = {};
+            for (final loan in pendingLoans) {
+              studentPendingLoans.putIfAbsent(loan.userId, () => []).add(loan);
+            }
+
+            // Filter entries according to search query
+            final filteredEntries = studentPendingLoans.entries.where((entry) {
+              if (_pendingFinesSearchQuery.isEmpty) return true;
+              final q = _pendingFinesSearchQuery.toLowerCase();
+              final user = userMap[entry.key];
+              final name = user?.name.toLowerCase() ?? '';
+              final email = user?.email.toLowerCase() ?? '';
+              final contact = user?.contact.toLowerCase() ?? '';
+              final bookMatch =
+                  entry.value.any((l) => l.bookTitle.toLowerCase().contains(q));
+              return name.contains(q) ||
+                  email.contains(q) ||
+                  contact.contains(q) ||
+                  bookMatch;
+            }).toList();
+
+            return ListView(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+              children: [
+                // Top header label
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'PENDING CASH FINES DIRECTORY',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textMuted,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    Text(
+                      '${studentPendingLoans.length} student(s) owe fines',
+                      style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        color: AppTheme.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+
+                // Primary Highlight Banner for Pending Cash
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        AppTheme.error.withValues(alpha: 0.22),
+                        AppTheme.warning.withValues(alpha: 0.12),
+                        AppTheme.bgCard,
+                      ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: AppTheme.error.withValues(alpha: 0.4),
+                      width: 1.2,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: AppTheme.error.withValues(alpha: 0.25),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(
+                              Icons.payments_rounded,
+                              color: AppTheme.error,
+                              size: 24,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Total Outstanding Cash Due',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                                Text(
+                                  '₹$totalPendingFines',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 26,
+                                    fontWeight: FontWeight.w900,
+                                    color: totalPendingFines > 0
+                                        ? AppTheme.error
+                                        : AppTheme.success,
+                                    letterSpacing: -0.5,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 10, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppTheme.bgCard,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                  color: Colors.white.withValues(alpha: 0.08)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'Rate: ₹3/day',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppTheme.warning,
+                                  ),
+                                ),
+                                Text(
+                                  'Cash only at desk',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 10,
+                                    color: AppTheme.textMuted,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      const Divider(color: Colors.white12, height: 1),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildFineStatSnippet(
+                            label: 'Students Owed',
+                            value: '${studentPendingLoans.length}',
+                            color: AppTheme.textPrimary,
+                          ),
+                          _buildFineStatSnippet(
+                            label: 'Unsettled Loans',
+                            value: '${pendingLoans.length}',
+                            color: AppTheme.error,
+                          ),
+                          _buildFineStatSnippet(
+                            label: 'Total Collected',
+                            value: '₹$totalCashCollected',
+                            color: AppTheme.success,
+                          ),
+                          _buildFineStatSnippet(
+                            label: 'Total Assessed',
+                            value: '₹$totalAssessedFines',
+                            color: AppTheme.textSecondary,
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 14),
+
+                // Search Bar
+                TextField(
+                  style: GoogleFonts.outfit(color: AppTheme.textPrimary),
+                  decoration: InputDecoration(
+                    hintText: 'Search fine by student name, contact, book...',
+                    hintStyle: GoogleFonts.outfit(
+                        color: AppTheme.textMuted, fontSize: 13),
+                    prefixIcon: const Icon(Icons.search_rounded,
+                        color: AppTheme.textMuted, size: 20),
+                    suffixIcon: _pendingFinesSearchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.close_rounded,
+                                color: AppTheme.textMuted, size: 18),
+                            onPressed: () {
+                              setState(() => _pendingFinesSearchQuery = '');
+                            },
+                          )
+                        : null,
+                    filled: true,
+                    fillColor: AppTheme.bgCard,
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          BorderSide(color: Colors.white.withValues(alpha: 0.08)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                      borderSide:
+                          const BorderSide(color: AppTheme.primary, width: 1.5),
+                    ),
+                  ),
+                  onChanged: (val) {
+                    setState(() => _pendingFinesSearchQuery = val);
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // Students List
+                if (studentPendingLoans.isEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        vertical: 40, horizontal: 24),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppTheme.bgCard,
+                      borderRadius: BorderRadius.circular(18),
+                      border: Border.all(
+                          color: AppTheme.success.withValues(alpha: 0.2)),
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: AppTheme.success.withValues(alpha: 0.15),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.check_circle_outline_rounded,
+                            color: AppTheme.success,
+                            size: 40,
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'All Late Fees Settled!',
+                          style: GoogleFonts.outfit(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Text(
+                          'No students currently have outstanding cash fines. Every borrowed book is returned on time or fully settled.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            color: AppTheme.textSecondary,
+                            height: 1.4,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (filteredEntries.isEmpty) ...[
+                  Container(
+                    padding: const EdgeInsets.all(32),
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: AppTheme.bgCard,
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Text(
+                      'No students with pending fines match "$_pendingFinesSearchQuery".',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.outfit(color: AppTheme.textSecondary),
+                    ),
+                  ),
+                ] else ...[
+                  ...filteredEntries.map((entry) {
+                    final userId = entry.key;
+                    final studentLoans = entry.value;
+                    final student = userMap[userId] ??
+                        UserModel(
+                          uid: userId,
+                          email: 'Student ($userId)',
+                          name: 'Student ($userId)',
+                          contact: '',
+                        );
+
+                    final studentTotalRemaining = studentLoans.fold<int>(
+                        0, (sum, l) => sum + l.remainingFine);
+                    final studentTotalPaid =
+                        studentLoans.fold<int>(0, (sum, l) => sum + l.finePaid);
+
+                    return _buildPendingFineStudentCard(
+                      student: student,
+                      loans: studentLoans,
+                      totalRemainingFine: studentTotalRemaining,
+                      totalPaidFine: studentTotalPaid,
+                    );
+                  }),
+                ],
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildFineStatSnippet({
+    required String label,
+    required String value,
+    required Color color,
+  }) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: GoogleFonts.outfit(
+            fontSize: 14,
+            fontWeight: FontWeight.w800,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 10,
+            color: AppTheme.textMuted,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPendingFineStudentCard({
+    required UserModel student,
+    required List<BorrowHistory> loans,
+    required int totalRemainingFine,
+    required int totalPaidFine,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: AppTheme.error.withValues(alpha: 0.3),
+          width: 1.2,
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Student Header Row
+            Row(
+              children: [
+                CircleAvatar(
+                  radius: 20,
+                  backgroundColor: AppTheme.primary.withValues(alpha: 0.25),
+                  child: Text(
+                    student.name.isNotEmpty
+                        ? student.name[0].toUpperCase()
+                        : 'S',
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: AppTheme.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        student.name.isNotEmpty ? student.name : 'Unknown Student',
+                        style: GoogleFonts.outfit(
+                          fontSize: 15,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${student.email}${student.contact.isNotEmpty ? " • ${student.contact}" : ""}',
+                        style: GoogleFonts.outfit(
+                          fontSize: 11,
+                          color: AppTheme.textMuted,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.error.withValues(alpha: 0.18),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: AppTheme.error.withValues(alpha: 0.4),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'DUE: ₹$totalRemainingFine',
+                        style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: AppTheme.error,
+                        ),
+                      ),
+                      if (totalPaidFine > 0)
+                        Text(
+                          'Paid: ₹$totalPaidFine',
+                          style: GoogleFonts.outfit(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w600,
+                            color: AppTheme.success,
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 14),
+            const Divider(color: Colors.white10, height: 1),
+            const SizedBox(height: 12),
+
+            Text(
+              'Overdue Books with Unsettled Fines (${loans.length}):',
+              style: GoogleFonts.outfit(
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                color: AppTheme.textSecondary,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            // Book items
+            ...loans.map((loan) {
+              return Container(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.bgCardLight,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: AppTheme.error.withValues(alpha: 0.2),
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Icon(
+                          Icons.menu_book_rounded,
+                          color: AppTheme.primary,
+                          size: 18,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                loan.bookTitle,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textPrimary,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                loan.isActive
+                                    ? 'Book Status: Currently in possession (Active)'
+                                    : 'Book Status: Book Returned to library',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  color: loan.isActive
+                                      ? AppTheme.warning
+                                      : AppTheme.success,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: AppTheme.error.withValues(alpha: 0.15),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            '₹${loan.remainingFine} due',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w800,
+                              color: AppTheme.error,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.black.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Late by ${loan.overdueDays} day(s) (₹3/day)',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: AppTheme.warning,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            'Fee: ₹${loan.totalFine}  •  Paid: ₹${loan.finePaid}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              color: AppTheme.textSecondary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    // Action button to collect cash
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.primary,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 6),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        icon: const Icon(Icons.point_of_sale_rounded,
+                            size: 14, color: Colors.white),
+                        label: Text(
+                          'Collect Cash (₹${loan.remainingFine})',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        onPressed: () => _showManageCashDialog(loan, student),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ===========================================================================
   // TAB 2: Book Inventory
   // ===========================================================================
 
@@ -1593,7 +2289,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: Text(
-                  'No books in inventory. Tap "Add New Book" below!',
+                  'No books in inventory. Tap "Add Book" below!',
                   style: GoogleFonts.outfit(color: AppTheme.textSecondary),
                 ),
               )
@@ -1620,14 +2316,14 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: SizedBox(
-              width: 48,
-              height: 64,
+              width: 52,
+              height: 70,
               child: BookCoverImage(
                 imageUrl: book.imageUrl,
                 fit: BoxFit.cover,
                 fallback: Container(
-                  width: 48,
-                  height: 64,
+                  width: 52,
+                  height: 70,
                   decoration: BoxDecoration(
                     gradient: AppTheme.primaryGradient,
                     borderRadius: BorderRadius.circular(8),
@@ -1643,21 +2339,52 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  book.title,
-                  style: GoogleFonts.outfit(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 16,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  'by ${book.author}',
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    color: AppTheme.primary,
-                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            book.title,
+                            style: GoogleFonts.outfit(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 16,
+                              color: AppTheme.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'by ${book.author}',
+                            style: GoogleFonts.outfit(
+                              fontSize: 13,
+                              color: AppTheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.edit_outlined,
+                          color: AppTheme.primary, size: 20),
+                      tooltip: 'Edit Book Details',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showEditBookDialog(book),
+                    ),
+                    const SizedBox(width: 12),
+                    IconButton(
+                      icon: const Icon(Icons.delete_outline_rounded,
+                          color: AppTheme.error, size: 20),
+                      tooltip: 'Delete Book',
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: () => _showDeleteBookDialog(book),
+                    ),
+                  ],
                 ),
                 if (book.description.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -1727,6 +2454,560 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showEditBookDialog(Book book) {
+    final formKey = GlobalKey<FormState>();
+    final titleController = TextEditingController(text: book.title);
+    final authorController = TextEditingController(text: book.author);
+    final copiesController =
+        TextEditingController(text: book.availableCopies.toString());
+    final descController = TextEditingController(text: book.description);
+    final imageUrlController = TextEditingController(text: book.imageUrl);
+    bool isSaving = false;
+    bool isPicking = false;
+    String? pickedName;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            Future<void> pickGalleryImage() async {
+              setDialogState(() => isPicking = true);
+              try {
+                final picker = ImagePicker();
+                final XFile? file = await picker.pickImage(
+                  source: ImageSource.gallery,
+                  maxWidth: 600,
+                  maxHeight: 800,
+                  imageQuality: 75,
+                );
+                if (file != null) {
+                  final bytes = await file.readAsBytes();
+                  final base64String =
+                      'data:image/jpeg;base64,${base64Encode(bytes)}';
+                  setDialogState(() {
+                    imageUrlController.text = base64String;
+                    pickedName = file.name;
+                  });
+                }
+              } catch (e) {
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Could not access gallery: $e'),
+                      backgroundColor: AppTheme.error,
+                    ),
+                  );
+                }
+              } finally {
+                setDialogState(() => isPicking = false);
+              }
+            }
+
+            return AlertDialog(
+              backgroundColor: AppTheme.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.primary.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.edit_note_rounded,
+                        color: AppTheme.primary, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Edit Book Information',
+                          style: GoogleFonts.outfit(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w800,
+                            color: AppTheme.textPrimary,
+                          ),
+                        ),
+                        Text(
+                          'Modify book details in library catalogue',
+                          style: GoogleFonts.outfit(
+                            fontSize: 11,
+                            color: AppTheme.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              content: SizedBox(
+                width: double.maxFinite,
+                child: Form(
+                  key: formKey,
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        // Cover Preview & Gallery Picker
+                        Center(
+                          child: Stack(
+                            alignment: Alignment.bottomRight,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(10),
+                                child: SizedBox(
+                                  width: 80,
+                                  height: 110,
+                                  child: BookCoverImage(
+                                    imageUrl: imageUrlController.text.trim(),
+                                    fit: BoxFit.cover,
+                                    fallback: Container(
+                                      decoration: BoxDecoration(
+                                        gradient: AppTheme.primaryGradient,
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                      child: const Icon(Icons.menu_book_rounded,
+                                          color: Colors.white, size: 32),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              InkWell(
+                                onTap: isPicking ? null : pickGalleryImage,
+                                child: Container(
+                                  padding: const EdgeInsets.all(6),
+                                  decoration: BoxDecoration(
+                                    color: AppTheme.primary,
+                                    shape: BoxShape.circle,
+                                    border: Border.all(
+                                        color: AppTheme.bgCard, width: 2),
+                                  ),
+                                  child: isPicking
+                                      ? const SizedBox(
+                                          width: 14,
+                                          height: 14,
+                                          child: CircularProgressIndicator(
+                                            strokeWidth: 2,
+                                            color: Colors.white,
+                                          ),
+                                        )
+                                      : const Icon(Icons.camera_alt_rounded,
+                                          color: Colors.white, size: 14),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Center(
+                          child: TextButton.icon(
+                            onPressed: isPicking ? null : pickGalleryImage,
+                            icon: const Icon(Icons.photo_library_rounded,
+                                size: 14, color: AppTheme.primary),
+                            label: Text(
+                              pickedName != null
+                                  ? 'Image Picked ($pickedName)'
+                                  : 'Select New Image from Gallery',
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        // Title
+                        _buildFieldLabel('Book Title *'),
+                        const SizedBox(height: 4),
+                        TextFormField(
+                          controller: titleController,
+                          style: GoogleFonts.outfit(
+                              color: AppTheme.textPrimary, fontSize: 13),
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _inputDecoration(
+                            hint: 'Book Title',
+                            icon: Icons.title_rounded,
+                          ),
+                          validator: (val) =>
+                              (val == null || val.trim().isEmpty)
+                                  ? 'Title cannot be empty'
+                                  : null,
+                        ),
+                        const SizedBox(height: 10),
+                        // Author
+                        _buildFieldLabel('Author Name *'),
+                        const SizedBox(height: 4),
+                        TextFormField(
+                          controller: authorController,
+                          style: GoogleFonts.outfit(
+                              color: AppTheme.textPrimary, fontSize: 13),
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _inputDecoration(
+                            hint: 'Author',
+                            icon: Icons.person_outline_rounded,
+                          ),
+                          validator: (val) =>
+                              (val == null || val.trim().isEmpty)
+                                  ? 'Author cannot be empty'
+                                  : null,
+                        ),
+                        const SizedBox(height: 10),
+                        // Available Copies
+                        _buildFieldLabel('Available Copies *'),
+                        const SizedBox(height: 4),
+                        TextFormField(
+                          controller: copiesController,
+                          style: GoogleFonts.outfit(
+                              color: AppTheme.textPrimary, fontSize: 13),
+                          keyboardType: TextInputType.number,
+                          decoration: _inputDecoration(
+                            hint: 'Copies (e.g. 5)',
+                            icon: Icons.copy_rounded,
+                          ),
+                          validator: (val) {
+                            final n = int.tryParse(val ?? '');
+                            if (n == null || n < 0) {
+                              return 'Must be 0 or greater';
+                            }
+                            return null;
+                          },
+                        ),
+                        const SizedBox(height: 10),
+                        // Description
+                        _buildFieldLabel('Description'),
+                        const SizedBox(height: 4),
+                        TextFormField(
+                          controller: descController,
+                          style: GoogleFonts.outfit(
+                              color: AppTheme.textPrimary, fontSize: 13),
+                          maxLines: 3,
+                          textCapitalization: TextCapitalization.sentences,
+                          decoration: _inputDecoration(
+                            hint: 'Book summary or notes...',
+                            icon: Icons.description_outlined,
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        // Image URL optional override
+                        _buildFieldLabel('Image Web URL (Optional)'),
+                        const SizedBox(height: 4),
+                        TextFormField(
+                          controller: imageUrlController,
+                          style: GoogleFonts.outfit(
+                              color: AppTheme.textPrimary, fontSize: 12),
+                          keyboardType: TextInputType.url,
+                          onChanged: (_) => setDialogState(() {}),
+                          decoration: _inputDecoration(
+                            hint: 'https://...',
+                            icon: Icons.link_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isSaving ? null : () => Navigator.pop(dialogCtx),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.outfit(color: AppTheme.textMuted),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.primary,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                  icon: isSaving
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.check_rounded,
+                          color: Colors.white, size: 16),
+                  label: Text(
+                    isSaving ? 'Saving...' : 'Save Changes',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  onPressed: isSaving
+                      ? null
+                      : () async {
+                          if (!formKey.currentState!.validate()) return;
+                          setDialogState(() => isSaving = true);
+                          try {
+                            final updatedCopies =
+                                int.parse(copiesController.text.trim());
+                            await _firestoreService.updateBook(
+                              bookId: book.bookId,
+                              title: titleController.text.trim(),
+                              author: authorController.text.trim(),
+                              description: descController.text.trim(),
+                              availableCopies: updatedCopies,
+                              imageUrl: imageUrlController.text.trim(),
+                            );
+                            if (dialogCtx.mounted) {
+                              Navigator.pop(dialogCtx);
+                            }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle_outline,
+                                          color: AppTheme.success, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Book "${titleController.text.trim()}" updated successfully!',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: AppTheme.bgCardLight,
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.all(16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isSaving = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to update book: $e'),
+                                  backgroundColor: AppTheme.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showDeleteBookDialog(Book book) {
+    bool isDeleting = false;
+
+    showDialog(
+      context: context,
+      builder: (dialogCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AppTheme.bgCard,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+                side: BorderSide(
+                    color: AppTheme.error.withValues(alpha: 0.3), width: 1.2),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AppTheme.error.withValues(alpha: 0.2),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_forever_rounded,
+                        color: AppTheme.error, size: 22),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Delete Book',
+                      style: GoogleFonts.outfit(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppTheme.textPrimary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppTheme.bgCardLight,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.06)),
+                    ),
+                    child: Row(
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: SizedBox(
+                            width: 40,
+                            height: 52,
+                            child: BookCoverImage(
+                              imageUrl: book.imageUrl,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                book.title,
+                                style: GoogleFonts.outfit(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 14,
+                                  color: AppTheme.textPrimary,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'by ${book.author}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Are you sure you want to permanently delete this book from the library catalogue? This action cannot be undone.',
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      color: AppTheme.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: isDeleting ? null : () => Navigator.pop(dialogCtx),
+                  child: Text(
+                    'Cancel',
+                    style: GoogleFonts.outfit(color: AppTheme.textMuted),
+                  ),
+                ),
+                ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.error,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 16, vertical: 10),
+                  ),
+                  icon: isDeleting
+                      ? const SizedBox(
+                          width: 14,
+                          height: 14,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Icon(Icons.delete_rounded,
+                          color: Colors.white, size: 16),
+                  label: Text(
+                    isDeleting ? 'Deleting...' : 'Delete Book',
+                    style: GoogleFonts.outfit(
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                  onPressed: isDeleting
+                      ? null
+                      : () async {
+                          setDialogState(() => isDeleting = true);
+                          try {
+                            await _firestoreService.deleteBook(book.bookId);
+                            if (dialogCtx.mounted) {
+                              Navigator.pop(dialogCtx);
+                            }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Row(
+                                    children: [
+                                      const Icon(Icons.delete_outline_rounded,
+                                          color: AppTheme.error, size: 18),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          'Book "${book.title}" was deleted.',
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  backgroundColor: AppTheme.bgCardLight,
+                                  behavior: SnackBarBehavior.floating,
+                                  margin: const EdgeInsets.all(16),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isDeleting = false);
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Failed to delete book: $e'),
+                                  backgroundColor: AppTheme.error,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
 

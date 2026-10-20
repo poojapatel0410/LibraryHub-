@@ -83,24 +83,6 @@ class _LoginScreenState extends State<LoginScreen>
     }
   }
 
-  void _fillAdminCredentials() {
-    setState(() {
-      _emailController.text = 'admin@libraryhub.com';
-      _passwordController.text = 'admin123';
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Admin credentials filled. Tap "Sign In" to enter Admin Portal.',
-          style: GoogleFonts.outfit(color: AppTheme.textPrimary),
-        ),
-        backgroundColor: AppTheme.bgCardLight,
-        behavior: SnackBarBehavior.floating,
-        margin: const EdgeInsets.all(16),
-        duration: const Duration(seconds: 2),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -162,60 +144,23 @@ class _LoginScreenState extends State<LoginScreen>
 
                       const SizedBox(height: 40),
 
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        crossAxisAlignment: CrossAxisAlignment.end,
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Sign In',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 26,
-                                  fontWeight: FontWeight.w700,
-                                  color: AppTheme.textPrimary,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                'Access student or admin portal',
-                                style: GoogleFonts.outfit(
-                                  fontSize: 14,
-                                  color: AppTheme.textSecondary,
-                                ),
-                              ),
-                            ],
+                          Text(
+                            'Sign In',
+                            style: GoogleFonts.outfit(
+                              fontSize: 26,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
+                            ),
                           ),
-                          // Quick Admin Fill Button
-                          InkWell(
-                            onTap: _fillAdminCredentials,
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                color: AppTheme.primary.withValues(alpha: 0.15),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                    color: AppTheme.primary.withValues(alpha: 0.4)),
-                              ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  const Icon(Icons.admin_panel_settings_rounded,
-                                      size: 14, color: AppTheme.primary),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    'Admin Login',
-                                    style: GoogleFonts.outfit(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppTheme.primary,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Access student or admin portal',
+                            style: GoogleFonts.outfit(
+                              fontSize: 14,
+                              color: AppTheme.textSecondary,
                             ),
                           ),
                         ],

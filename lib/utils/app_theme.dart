@@ -46,7 +46,7 @@ class AppTheme {
   // -- Shadows ----------------------------------------------------------------
   static List<BoxShadow> get primaryShadow => [
         BoxShadow(
-          color: primary.withOpacity(0.35),
+          color: primary.withValues(alpha: 0.35),
           blurRadius: 20,
           offset: const Offset(0, 8),
         ),
@@ -54,7 +54,7 @@ class AppTheme {
 
   static List<BoxShadow> get cardShadow => [
         BoxShadow(
-          color: Colors.black.withOpacity(0.4),
+          color: Colors.black.withValues(alpha: 0.4),
           blurRadius: 16,
           offset: const Offset(0, 6),
         ),
@@ -100,7 +100,8 @@ class AppTheme {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
-          borderSide: BorderSide(color: textMuted.withOpacity(0.3), width: 1),
+          borderSide:
+              BorderSide(color: textMuted.withValues(alpha: 0.3), width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(14),
@@ -160,7 +161,7 @@ class AppTheme {
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       ),
       dividerTheme: DividerThemeData(
-        color: textMuted.withOpacity(0.2),
+        color: textMuted.withValues(alpha: 0.2),
         thickness: 1,
       ),
       pageTransitionsTheme: const PageTransitionsTheme(

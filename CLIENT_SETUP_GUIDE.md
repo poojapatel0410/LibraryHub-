@@ -14,13 +14,15 @@ Everything is pre-configured and connected to a live Cloud Firestore backend. Yo
 | **Portal** | Dedicated Admin Dashboard | Real-time monitoring & stock control |
 | **Admin Email** | `admin@libraryhub.com` | Pre-registered in Firebase Auth |
 | **Admin Password** | `admin123` | Secure default password |
-| **Quick Action** | **"Admin Login" button** | Click the purple button on the Sign-In screen to auto-fill credentials |
+| **Sign-In Security** | **Direct Input** | Enter Admin Email & Password manually on the Sign-In screen (auto-fill shortcut removed for security) |
 
 > **What the Admin Can Do:**
-> - 📊 View live KPI stats (Total Students, Active Loans, Returned Books)
+> - 📊 View live KPI stats (Total Students, Active Loans, Returned Books, Outstanding Cash Fines)
 > - 👥 Track all registered students (Name, Contact, Education, Address, Registration Email)
-> - 📜 Monitor student loans (See how many books each student has borrowed vs. returned, expand to see details)
+> - 💰 **Dedicated Pending Fines Directory**: Standalone tab showing only students with unpaid late fees (₹3/day), remaining balance, overdue days, with instant **Collect Cash** workflow.
 > - 📦 Live Inventory Management (Increase `+` or decrease `-` available book stock)
+> - ✏️ **Edit Book Details**: Update title, author, available copies, description, or change book cover image from gallery or web URL.
+> - 🗑️ **Delete Books**: Remove titles from the catalogue with confirmation protection.
 > - ➕ Add new books to the catalogue (Title, Author, Copies, Description, and Cover Photo directly from Gallery or Web URL)
 
 ---

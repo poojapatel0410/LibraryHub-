@@ -135,7 +135,7 @@ class _RegisterScreenState extends State<RegisterScreen>
                           color: AppTheme.bgCard,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(
-                            color: AppTheme.textMuted.withOpacity(0.3),
+                            color: AppTheme.textMuted.withValues(alpha: 0.3),
                           ),
                         ),
                         child: const Icon(
@@ -278,10 +278,10 @@ class _RegisterScreenState extends State<RegisterScreen>
                           Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
-                              color: AppTheme.primary.withOpacity(0.08),
+                              color: AppTheme.primary.withValues(alpha: 0.08),
                               borderRadius: BorderRadius.circular(12),
                               border: Border.all(
-                                color: AppTheme.primary.withOpacity(0.2),
+                                color: AppTheme.primary.withValues(alpha: 0.2),
                               ),
                             ),
                             child: Row(

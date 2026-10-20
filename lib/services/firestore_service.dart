@@ -63,6 +63,28 @@ class FirestoreService {
     });
   }
 
+  /// Updates complete book information in Firestore (Admin feature).
+  Future<void> updateBook({
+    required String bookId,
+    required String title,
+    required String author,
+    required String description,
+    required int availableCopies,
+    String? imageUrl,
+  }) async {
+    final Map<String, dynamic> data = {
+      'title': title.trim(),
+      'author': author.trim(),
+      'auther': author.trim(),
+      'description': description.trim(),
+      'availableCopies': availableCopies,
+    };
+    if (imageUrl != null) {
+      data['imageUrl'] = imageUrl.trim();
+    }
+    await _db.collection(AppConstants.booksCollection).doc(bookId).update(data);
+  }
+
   /// Deletes a book from the library catalogue.
   Future<void> deleteBook(String bookId) async {
     await _db.collection(AppConstants.booksCollection).doc(bookId).delete();
