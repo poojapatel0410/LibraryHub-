@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../models/book.dart';
 import '../../models/borrow_history.dart';
@@ -27,7 +28,7 @@ class AdminDashboardScreen extends StatefulWidget {
 
 class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   final FirestoreService _firestoreService = FirestoreService();
-  int _currentTab = 0; // 0: Students & Activity, 1: Pending Fines, 2: Book Inventory, 3: Add Book
+  int _currentTab = 0; // 0: Students, 1: Issued Books, 2: Pending Fines, 3: Inventory, 4: Add Book
 
   // Add Book Form Controllers
   final _addBookFormKey = GlobalKey<FormState>();
@@ -44,6 +45,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   String _userSearchQuery = '';
   // Search filter for pending fines section
   String _pendingFinesSearchQuery = '';
+
+  // Issued Books Tracker Tab State
+  String _issuedBooksSearchQuery = '';
+  String _issuedDateFilter = 'All'; // 'All', 'Today', 'Week', 'Month', 'Custom'
+  DateTimeRange? _issuedCustomDateRange;
+  String _issuedBooksStatusFilter = 'All'; // 'All', 'Active', 'Returned'
 
   @override
   void dispose() {
@@ -112,7 +119,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
         _imageUrlController.clear();
         _pickedImageName = null;
         _copiesController.text = '5';
-        _currentTab = 2; // Switch to Inventory view
+        _currentTab = 3; // Switch to Inventory view
       });
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -161,6 +168,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                   index: _currentTab,
                   children: [
                     _buildStudentsAndActivityTab(),
+                    _buildIssuedBooksTab(),
                     _buildPendingFinesTab(),
                     _buildInventoryTab(),
                     _buildAddBookTab(),
@@ -276,12 +284,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           fontSize: 11,
           fontWeight: FontWeight.w700,
         ),
-        unselectedLabelStyle: GoogleFonts.outfit(fontSize: 11),
+        selectedFontSize: 10.5,
+        unselectedFontSize: 10,
         items: [
           const BottomNavigationBarItem(
             icon: Icon(Icons.people_alt_outlined),
             activeIcon: Icon(Icons.people_alt_rounded),
             label: 'Students',
+          ),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.assignment_outlined),
+            activeIcon: Icon(Icons.assignment_rounded),
+            label: 'Issued Books',
           ),
           BottomNavigationBarItem(
             icon: StreamBuilder<List<BorrowHistory>>(
@@ -314,7 +328,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 return const Icon(Icons.payments_rounded);
               },
             ),
-            label: 'Pending Fines',
+            label: 'Fines',
           ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.inventory_2_outlined),
@@ -393,6 +407,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           value: '$activeLoans',
                           icon: Icons.book_online_rounded,
                           color: AppTheme.warning,
+                          subtitle: 'View Issues →',
+                          onTap: () {
+                            setState(() {
+                              _currentTab = 1;
+                              _issuedBooksStatusFilter = 'Active';
+                            });
+                          },
                         ),
                       ),
                       const SizedBox(width: 12),
@@ -402,6 +423,13 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           value: '$returnedLoans',
                           icon: Icons.check_circle_rounded,
                           color: AppTheme.success,
+                          subtitle: 'View Returned →',
+                          onTap: () {
+                            setState(() {
+                              _currentTab = 1;
+                              _issuedBooksStatusFilter = 'Returned';
+                            });
+                          },
                         ),
                       ),
                     ],
@@ -514,7 +542,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                 ),
                               ),
                               onPressed: () =>
-                                  setState(() => _currentTab = 1),
+                                  setState(() => _currentTab = 2),
                             ),
                           ],
                         ],
@@ -2333,7 +2361,974 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
   }
 
   // ===========================================================================
-  // TAB 1: Pending Fines (Dedicated Cash Fine Recovery Section)
+  // TAB 1: Issued Books Tracker (Date & Student Filtered)
+  // ===========================================================================
+
+  Future<void> _pickIssuedDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(now.year + 2),
+      initialDateRange: _issuedCustomDateRange ??
+          DateTimeRange(
+            start: DateTime(now.year, now.month, now.day)
+                .subtract(const Duration(days: 7)),
+            end: DateTime(now.year, now.month, now.day),
+          ),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.dark(
+              primary: AppTheme.primary,
+              onPrimary: Colors.white,
+              surface: AppTheme.bgCard,
+              onSurface: AppTheme.textPrimary,
+            ),
+            dialogTheme:
+                const DialogThemeData(backgroundColor: AppTheme.bgCard),
+          ),
+          child: child!,
+        );
+      },
+    );
+
+    if (picked != null) {
+      setState(() {
+        _issuedCustomDateRange = picked;
+        _issuedDateFilter = 'Custom';
+      });
+    }
+  }
+
+  bool _matchesDateFilter(DateTime borrowDate) {
+    final now = DateTime.now();
+    switch (_issuedDateFilter) {
+      case 'Today':
+        return borrowDate.year == now.year &&
+            borrowDate.month == now.month &&
+            borrowDate.day == now.day;
+      case 'Week':
+        final startOfWeek = DateTime(now.year, now.month, now.day)
+            .subtract(Duration(days: now.weekday - 1));
+        final endOfWeek = startOfWeek.add(const Duration(days: 7));
+        return borrowDate
+                .isAfter(startOfWeek.subtract(const Duration(seconds: 1))) &&
+            borrowDate.isBefore(endOfWeek);
+      case 'Month':
+        return borrowDate.year == now.year &&
+            borrowDate.month == now.month;
+      case 'Custom':
+        if (_issuedCustomDateRange == null) return true;
+        final start = DateTime(
+          _issuedCustomDateRange!.start.year,
+          _issuedCustomDateRange!.start.month,
+          _issuedCustomDateRange!.start.day,
+          0,
+          0,
+          0,
+        );
+        final end = DateTime(
+          _issuedCustomDateRange!.end.year,
+          _issuedCustomDateRange!.end.month,
+          _issuedCustomDateRange!.end.day,
+          23,
+          59,
+          59,
+        );
+        return borrowDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
+            borrowDate.isBefore(end.add(const Duration(seconds: 1)));
+      case 'All':
+      default:
+        return true;
+    }
+  }
+
+  Widget _buildMetricSnippet({
+    required String label,
+    required String value,
+    required Color color,
+    required IconData icon,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.25)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  value,
+                  style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: AppTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w500,
+                    color: AppTheme.textMuted,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDateFilterChip({
+    required String label,
+    required String filterKey,
+  }) {
+    final isSelected = _issuedDateFilter == filterKey;
+    return InkWell(
+      onTap: () {
+        setState(() {
+          _issuedDateFilter = filterKey;
+          if (filterKey != 'Custom') {
+            _issuedCustomDateRange = null;
+          }
+        });
+      },
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : AppTheme.bgCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primary
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? Colors.white : AppTheme.textSecondary,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCustomDateChip() {
+    final isSelected = _issuedDateFilter == 'Custom';
+    return InkWell(
+      onTap: _pickIssuedDateRange,
+      borderRadius: BorderRadius.circular(20),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 180),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: BoxDecoration(
+          color: isSelected ? AppTheme.primary : AppTheme.bgCard,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: isSelected
+                ? AppTheme.primary
+                : Colors.white.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.date_range_rounded,
+              size: 13,
+              color: isSelected ? Colors.white : AppTheme.textSecondary,
+            ),
+            const SizedBox(width: 5),
+            Text(
+              _issuedCustomDateRange != null
+                  ? '${DateFormat('dd/MM').format(_issuedCustomDateRange!.start)} - ${DateFormat('dd/MM').format(_issuedCustomDateRange!.end)}'
+                  : 'Custom Date',
+              style: GoogleFonts.outfit(
+                fontSize: 12,
+                fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                color: isSelected ? Colors.white : AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatusPill({
+    required String label,
+    required String statusKey,
+    Color activeColor = AppTheme.primary,
+  }) {
+    final isSelected = _issuedBooksStatusFilter == statusKey;
+    return InkWell(
+      onTap: () {
+        setState(() => _issuedBooksStatusFilter = statusKey);
+      },
+      borderRadius: BorderRadius.circular(8),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withValues(alpha: 0.2)
+              : Colors.transparent,
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(
+            color: isSelected
+                ? activeColor
+                : Colors.white.withValues(alpha: 0.1),
+            width: isSelected ? 1.2 : 1,
+          ),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.outfit(
+            fontSize: 11,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected ? activeColor : AppTheme.textMuted,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildIssuedBookCard({
+    required BorrowHistory history,
+    required String studentName,
+    Book? book,
+  }) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.bgCard,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(
+          color: (history.isActive
+              ? (history.isOverdue
+                  ? AppTheme.error.withValues(alpha: 0.3)
+                  : AppTheme.primary.withValues(alpha: 0.2))
+              : Colors.white.withValues(alpha: 0.06)),
+        ),
+      ),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Top Row: Book cover/icon, Book Title, and Student Name (ONLY name of student)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Book Cover or Icon
+              if (book != null && book.hasImage)
+                BookCoverImage(
+                  imageUrl: book.imageUrl,
+                  width: 44,
+                  height: 60,
+                  borderRadius: BorderRadius.circular(8),
+                )
+              else
+                Container(
+                  width: 44,
+                  height: 60,
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.3),
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.menu_book_rounded,
+                    color: AppTheme.primary,
+                    size: 22,
+                  ),
+                ),
+              const SizedBox(width: 12),
+
+              // Title and Student Name
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Book Title
+                    Text(
+                      history.bookTitle,
+                      style: GoogleFonts.outfit(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.textPrimary,
+                        height: 1.25,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+
+                    // Student Name (ONLY student name as requested)
+                    Row(
+                      children: [
+                        const Icon(
+                          Icons.person_rounded,
+                          size: 14,
+                          color: AppTheme.accent,
+                        ),
+                        const SizedBox(width: 5),
+                        Text(
+                          'Student: ',
+                          style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.textMuted,
+                          ),
+                        ),
+                        Expanded(
+                          child: Text(
+                            studentName,
+                            style: GoogleFonts.outfit(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.textPrimary,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Status badge
+              if (history.isActive)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                  decoration: BoxDecoration(
+                    color: (history.isOverdue
+                            ? AppTheme.error
+                            : AppTheme.warning)
+                        .withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: (history.isOverdue
+                              ? AppTheme.error
+                              : AppTheme.warning)
+                          .withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        history.isOverdue
+                            ? Icons.error_outline_rounded
+                            : Icons.schedule_rounded,
+                        size: 11,
+                        color: history.isOverdue
+                            ? AppTheme.error
+                            : AppTheme.warning,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        history.isOverdue ? 'Overdue' : 'Issued',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: history.isOverdue
+                              ? AppTheme.error
+                              : AppTheme.warning,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
+              else
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                  decoration: BoxDecoration(
+                    color: AppTheme.success.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(
+                      color: AppTheme.success.withValues(alpha: 0.35),
+                    ),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(
+                        Icons.check_circle_rounded,
+                        size: 11,
+                        color: AppTheme.success,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        'Returned',
+                        style: GoogleFonts.outfit(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                          color: AppTheme.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+
+          const SizedBox(height: 12),
+          const Divider(color: Colors.white10, height: 1),
+          const SizedBox(height: 10),
+
+          // Bottom Row: Issue Date & Return Date
+          Row(
+            children: [
+              // Issue Date
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: Colors.black.withValues(alpha: 0.25),
+                    borderRadius: BorderRadius.circular(8),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.05)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today_rounded,
+                              size: 11, color: AppTheme.primary),
+                          const SizedBox(width: 5),
+                          Text(
+                            'ISSUE DATE',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        DateFormat('dd MMM yyyy').format(history.borrowDate),
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textPrimary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+
+              // Return Date
+              Expanded(
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: (history.isActive
+                            ? (history.isOverdue
+                                ? AppTheme.error
+                                : AppTheme.warning)
+                            : AppTheme.success)
+                        .withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: (history.isActive
+                              ? (history.isOverdue
+                                  ? AppTheme.error
+                                  : AppTheme.warning)
+                              : AppTheme.success)
+                          .withValues(alpha: 0.25),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(
+                            history.isActive
+                                ? Icons.event_available_rounded
+                                : Icons.check_circle_outline_rounded,
+                            size: 11,
+                            color: history.isActive
+                                ? (history.isOverdue
+                                    ? AppTheme.error
+                                    : AppTheme.warning)
+                                : AppTheme.success,
+                          ),
+                          const SizedBox(width: 5),
+                          Text(
+                            history.isActive ? 'DUE RETURN' : 'RETURN DATE',
+                            style: GoogleFonts.outfit(
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.5,
+                              color: history.isActive
+                                  ? (history.isOverdue
+                                      ? AppTheme.error
+                                      : AppTheme.warning)
+                                  : AppTheme.success,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        history.isActive
+                            ? DateFormat('dd MMM yyyy')
+                                .format(history.returnDate)
+                            : DateFormat('dd MMM yyyy').format(
+                                history.actualReturnDate ?? history.returnDate),
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: history.isActive
+                              ? (history.isOverdue
+                                  ? AppTheme.error
+                                  : AppTheme.textPrimary)
+                              : AppTheme.success,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildIssuedBooksTab() {
+    return StreamBuilder<List<BorrowHistory>>(
+      stream: _firestoreService.allBorrowHistoryStream(),
+      builder: (context, historySnapshot) {
+        return StreamBuilder<List<UserModel>>(
+          stream: _firestoreService.usersStream(),
+          builder: (context, userSnapshot) {
+            return StreamBuilder<List<Book>>(
+              stream: _firestoreService.booksStream(),
+              builder: (context, bookSnapshot) {
+                if (historySnapshot.connectionState ==
+                        ConnectionState.waiting &&
+                    !historySnapshot.hasData) {
+                  return const Center(
+                    child: CircularProgressIndicator(color: AppTheme.primary),
+                  );
+                }
+
+                final history = historySnapshot.data ?? [];
+                final users = userSnapshot.data ?? [];
+                final books = bookSnapshot.data ?? [];
+
+                // Create user map for fast lookup
+                final userMap = {for (var u in users) u.uid: u};
+                // Create book map for cover images
+                final bookMap = {for (var b in books) b.bookId: b};
+
+                // Filter by date first
+                final dateFiltered = history
+                    .where((h) => _matchesDateFilter(h.borrowDate))
+                    .toList();
+
+                // Compute counts in current date filter
+                final totalInDate = dateFiltered.length;
+                final activeInDate =
+                    dateFiltered.where((h) => h.isActive).length;
+                final returnedInDate =
+                    dateFiltered.where((h) => !h.isActive).length;
+
+                // Apply status filter
+                final statusFiltered = dateFiltered.where((h) {
+                  if (_issuedBooksStatusFilter == 'Active') return h.isActive;
+                  if (_issuedBooksStatusFilter == 'Returned') return !h.isActive;
+                  return true;
+                }).toList();
+
+                // Apply text search filter (by book title or student name)
+                final query = _issuedBooksSearchQuery.trim().toLowerCase();
+                final displayedList = statusFiltered.where((h) {
+                  if (query.isEmpty) return true;
+                  final student = userMap[h.userId];
+                  final studentName = student != null &&
+                          student.name.trim().isNotEmpty
+                      ? student.name.trim()
+                      : (student != null && student.email.isNotEmpty
+                          ? student.email.split('@').first
+                          : 'Student');
+                  return h.bookTitle.toLowerCase().contains(query) ||
+                      studentName.toLowerCase().contains(query);
+                }).toList();
+
+                return SingleChildScrollView(
+                  padding: const EdgeInsets.fromLTRB(20, 8, 20, 24),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Section Title & Description
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: BoxDecoration(
+                              gradient: AppTheme.primaryGradient,
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: const Icon(Icons.assignment_rounded,
+                                color: Colors.white, size: 20),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Issued Books Tracker',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppTheme.textPrimary,
+                                  ),
+                                ),
+                                Text(
+                                  'Filter by issue date, student, and book return status',
+                                  style: GoogleFonts.outfit(
+                                    fontSize: 12,
+                                    color: AppTheme.textSecondary,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Metrics summary row for this period
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildMetricSnippet(
+                              label: 'Total Issues',
+                              value: '$totalInDate',
+                              color: AppTheme.primary,
+                              icon: Icons.assignment_turned_in_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildMetricSnippet(
+                              label: 'Active Loans',
+                              value: '$activeInDate',
+                              color: AppTheme.warning,
+                              icon: Icons.book_online_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: _buildMetricSnippet(
+                              label: 'Returned',
+                              value: '$returnedInDate',
+                              color: AppTheme.success,
+                              icon: Icons.check_circle_rounded,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Search bar (book title or student name)
+                      TextField(
+                        style: GoogleFonts.outfit(
+                            color: AppTheme.textPrimary, fontSize: 13),
+                        decoration: InputDecoration(
+                          hintText: 'Search by book title or student name...',
+                          hintStyle: GoogleFonts.outfit(
+                              color: AppTheme.textMuted, fontSize: 12),
+                          prefixIcon: const Icon(Icons.search_rounded,
+                              size: 18, color: AppTheme.textMuted),
+                          suffixIcon: _issuedBooksSearchQuery.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded,
+                                      size: 16, color: AppTheme.textMuted),
+                                  onPressed: () {
+                                    setState(
+                                        () => _issuedBooksSearchQuery = '');
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 10),
+                          filled: true,
+                          fillColor: AppTheme.bgCard,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.08)),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: BorderSide(
+                                color: Colors.white.withValues(alpha: 0.08)),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(12),
+                            borderSide: const BorderSide(
+                                color: AppTheme.primary, width: 1.5),
+                          ),
+                        ),
+                        onChanged: (val) {
+                          setState(() => _issuedBooksSearchQuery = val);
+                        },
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Date Filter label & horizontal filter chips
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'FILTER BY ISSUE DATE',
+                            style: GoogleFonts.outfit(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.8,
+                              color: AppTheme.textMuted,
+                            ),
+                          ),
+                          if (_issuedDateFilter != 'All')
+                            InkWell(
+                              onTap: () {
+                                setState(() {
+                                  _issuedDateFilter = 'All';
+                                  _issuedCustomDateRange = null;
+                                });
+                              },
+                              child: Text(
+                                'Reset Date',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                            ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildDateFilterChip(
+                                label: 'All Time', filterKey: 'All'),
+                            const SizedBox(width: 8),
+                            _buildDateFilterChip(
+                                label: 'Today', filterKey: 'Today'),
+                            const SizedBox(width: 8),
+                            _buildDateFilterChip(
+                                label: 'This Week', filterKey: 'Week'),
+                            const SizedBox(width: 8),
+                            _buildDateFilterChip(
+                                label: 'This Month', filterKey: 'Month'),
+                            const SizedBox(width: 8),
+                            _buildCustomDateChip(),
+                          ],
+                        ),
+                      ),
+
+                      // If custom date range is active, show the active range pill
+                      if (_issuedDateFilter == 'Custom' &&
+                          _issuedCustomDateRange != null) ...[
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(
+                                color: AppTheme.primary.withValues(alpha: 0.3)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.date_range_rounded,
+                                  size: 14, color: AppTheme.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                '${DateFormat('dd MMM yyyy').format(_issuedCustomDateRange!.start)} - ${DateFormat('dd MMM yyyy').format(_issuedCustomDateRange!.end)}',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppTheme.primary,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              InkWell(
+                                onTap: _pickIssuedDateRange,
+                                child: const Icon(Icons.edit_calendar_rounded,
+                                    size: 14, color: AppTheme.primary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+
+                      const SizedBox(height: 14),
+
+                      // Status Sub-filter pills (All, Active, Returned)
+                      Row(
+                        children: [
+                          _buildStatusPill(
+                            label: 'All ($totalInDate)',
+                            statusKey: 'All',
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusPill(
+                            label: 'Active ($activeInDate)',
+                            statusKey: 'Active',
+                            activeColor: AppTheme.warning,
+                          ),
+                          const SizedBox(width: 8),
+                          _buildStatusPill(
+                            label: 'Returned ($returnedInDate)',
+                            statusKey: 'Returned',
+                            activeColor: AppTheme.success,
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Records Count Indicator
+                      Text(
+                        '${displayedList.length} book issue record(s) found',
+                        style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: AppTheme.textMuted,
+                        ),
+                      ),
+                      const SizedBox(height: 10),
+
+                      // List of Cards
+                      if (displayedList.isEmpty)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.only(top: 20),
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: AppTheme.bgCard,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: Colors.white.withValues(alpha: 0.05),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Icon(Icons.menu_book_outlined,
+                                  size: 42,
+                                  color: AppTheme.textMuted
+                                      .withValues(alpha: 0.5)),
+                              const SizedBox(height: 12),
+                              Text(
+                                'No book issues found',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppTheme.textSecondary,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                query.isNotEmpty
+                                    ? 'No matches for "$query"'
+                                    : 'No book issues match the selected "$_issuedDateFilter" filter.',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: AppTheme.textMuted,
+                                ),
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        )
+                      else
+                        ListView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: displayedList.length,
+                          itemBuilder: (context, index) {
+                            final h = displayedList[index];
+                            final student = userMap[h.userId];
+                            final studentName = student != null &&
+                                    student.name.trim().isNotEmpty
+                                ? student.name.trim()
+                                : (student != null && student.email.isNotEmpty
+                                    ? student.email.split('@').first
+                                    : 'Student');
+                            final book = bookMap[h.bookId];
+                            return _buildIssuedBookCard(
+                              history: h,
+                              studentName: studentName,
+                              book: book,
+                            );
+                          },
+                        ),
+                    ],
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ===========================================================================
+  // TAB 2: Pending Fines (Dedicated Cash Fine Recovery Section)
   // ===========================================================================
 
   Widget _buildPendingFinesTab() {
