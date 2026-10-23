@@ -412,6 +412,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             setState(() {
                               _currentTab = 1;
                               _issuedBooksStatusFilter = 'Active';
+                              _issuedDateFilter = 'All';
+                              _issuedCustomDateRange = null;
                             });
                           },
                         ),
@@ -428,6 +430,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             setState(() {
                               _currentTab = 1;
                               _issuedBooksStatusFilter = 'Returned';
+                              _issuedDateFilter = 'All';
+                              _issuedCustomDateRange = null;
                             });
                           },
                         ),
@@ -2401,23 +2405,44 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
     }
   }
 
-  bool _matchesDateFilter(DateTime borrowDate) {
+  /// Checks whether [date] falls into the currently selected [_issuedDateFilter] window.
+  /// Handles timezone normalization (.toLocal()) and precise day boundaries.
+  bool _matchesDate(DateTime? date) {
+    if (date == null) return false;
+    final local = date.toLocal();
     final now = DateTime.now();
+
     switch (_issuedDateFilter) {
       case 'Today':
-        return borrowDate.year == now.year &&
-            borrowDate.month == now.month &&
-            borrowDate.day == now.day;
+        return local.year == now.year &&
+            local.month == now.month &&
+            local.day == now.day;
+
       case 'Week':
-        final startOfWeek = DateTime(now.year, now.month, now.day)
-            .subtract(Duration(days: now.weekday - 1));
-        final endOfWeek = startOfWeek.add(const Duration(days: 7));
-        return borrowDate
-                .isAfter(startOfWeek.subtract(const Duration(seconds: 1))) &&
-            borrowDate.isBefore(endOfWeek);
+        // Monday 00:00:00 to Sunday 23:59:59.999 of the current week
+        final startOfWeek = DateTime(
+          now.year,
+          now.month,
+          now.day - (now.weekday - 1),
+          0,
+          0,
+          0,
+        );
+        final endOfWeek = DateTime(
+          startOfWeek.year,
+          startOfWeek.month,
+          startOfWeek.day + 6,
+          23,
+          59,
+          59,
+          999,
+        );
+        return !local.isBefore(startOfWeek) && !local.isAfter(endOfWeek);
+
       case 'Month':
-        return borrowDate.year == now.year &&
-            borrowDate.month == now.month;
+        // Current calendar month (same year and month)
+        return local.year == now.year && local.month == now.month;
+
       case 'Custom':
         if (_issuedCustomDateRange == null) return true;
         final start = DateTime(
@@ -2435,9 +2460,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
           23,
           59,
           59,
+          999,
         );
-        return borrowDate.isAfter(start.subtract(const Duration(seconds: 1))) &&
-            borrowDate.isBefore(end.add(const Duration(seconds: 1)));
+        return !local.isBefore(start) && !local.isAfter(end);
+
       case 'All':
       default:
         return true;
@@ -2916,7 +2942,8 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                             ? DateFormat('dd MMM yyyy')
                                 .format(history.returnDate)
                             : DateFormat('dd MMM yyyy').format(
-                                history.actualReturnDate ?? history.returnDate),
+                                history.effectiveReturnDate ??
+                                    history.returnDate),
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -2965,24 +2992,48 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                 // Create book map for cover images
                 final bookMap = {for (var b in books) b.bookId: b};
 
-                // Filter by date first
-                final dateFiltered = history
-                    .where((h) => _matchesDateFilter(h.borrowDate))
-                    .toList();
+                // Calculate date & period activity:
+                // 1. Transaction had an issue in this period if borrowDate matches filter
+                // 2. Transaction had a return in this period if !isActive && effectiveReturnDate matches filter
+                final periodFiltered = history.where((h) {
+                  final isIssued = _matchesDate(h.borrowDate);
+                  final isReturned =
+                      !h.isActive && _matchesDate(h.effectiveReturnDate);
+                  return isIssued || isReturned;
+                }).toList();
 
                 // Compute counts in current date filter
-                final totalInDate = dateFiltered.length;
-                final activeInDate =
-                    dateFiltered.where((h) => h.isActive).length;
-                final returnedInDate =
-                    dateFiltered.where((h) => !h.isActive).length;
+                final totalIssuedInPeriod =
+                    history.where((h) => _matchesDate(h.borrowDate)).length;
+                final activeInPeriod = history
+                    .where((h) => h.isActive && _matchesDate(h.borrowDate))
+                    .length;
+                final returnedInPeriod = history
+                    .where((h) =>
+                        !h.isActive && _matchesDate(h.effectiveReturnDate))
+                    .length;
+                final totalActivityInPeriod = periodFiltered.length;
 
                 // Apply status filter
-                final statusFiltered = dateFiltered.where((h) {
-                  if (_issuedBooksStatusFilter == 'Active') return h.isActive;
-                  if (_issuedBooksStatusFilter == 'Returned') return !h.isActive;
+                final statusFiltered = periodFiltered.where((h) {
+                  if (_issuedBooksStatusFilter == 'Active') {
+                    return h.isActive && _matchesDate(h.borrowDate);
+                  }
+                  if (_issuedBooksStatusFilter == 'Returned') {
+                    return !h.isActive &&
+                        _matchesDate(h.effectiveReturnDate);
+                  }
                   return true;
                 }).toList();
+
+                // Sort so most recent activity (return date or borrow date) appears first
+                statusFiltered.sort((a, b) {
+                  final aTime = (!a.isActive ? a.effectiveReturnDate : null) ??
+                      a.borrowDate;
+                  final bTime = (!b.isActive ? b.effectiveReturnDate : null) ??
+                      b.borrowDate;
+                  return bTime.compareTo(aTime);
+                });
 
                 // Apply text search filter (by book title or student name)
                 final query = _issuedBooksSearchQuery.trim().toLowerCase();
@@ -3048,8 +3099,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         children: [
                           Expanded(
                             child: _buildMetricSnippet(
-                              label: 'Total Issues',
-                              value: '$totalInDate',
+                              label: _issuedDateFilter == 'Today'
+                                  ? 'Today\'s Issues'
+                                  : (_issuedDateFilter == 'All'
+                                      ? 'Total Issues'
+                                      : 'Issues'),
+                              value: '$totalIssuedInPeriod',
                               color: AppTheme.primary,
                               icon: Icons.assignment_turned_in_rounded,
                             ),
@@ -3057,8 +3112,10 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildMetricSnippet(
-                              label: 'Active Loans',
-                              value: '$activeInDate',
+                              label: _issuedDateFilter == 'All'
+                                  ? 'Active Loans'
+                                  : 'Active Loans',
+                              value: '$activeInPeriod',
                               color: AppTheme.warning,
                               icon: Icons.book_online_rounded,
                             ),
@@ -3066,8 +3123,12 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: _buildMetricSnippet(
-                              label: 'Returned',
-                              value: '$returnedInDate',
+                              label: _issuedDateFilter == 'Today'
+                                  ? 'Today\'s Returns'
+                                  : (_issuedDateFilter == 'All'
+                                      ? 'Total Returned'
+                                      : 'Returned'),
+                              value: '$returnedInPeriod',
                               color: AppTheme.success,
                               icon: Icons.check_circle_rounded,
                             ),
@@ -3128,7 +3189,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           Text(
-                            'FILTER BY ISSUE DATE',
+                            'FILTER BY DATE (ISSUES & RETURNS)',
                             style: GoogleFonts.outfit(
                               fontSize: 11,
                               fontWeight: FontWeight.w700,
@@ -3222,18 +3283,18 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                       Row(
                         children: [
                           _buildStatusPill(
-                            label: 'All ($totalInDate)',
+                            label: 'All ($totalActivityInPeriod)',
                             statusKey: 'All',
                           ),
                           const SizedBox(width: 8),
                           _buildStatusPill(
-                            label: 'Active ($activeInDate)',
+                            label: 'Active ($activeInPeriod)',
                             statusKey: 'Active',
                             activeColor: AppTheme.warning,
                           ),
                           const SizedBox(width: 8),
                           _buildStatusPill(
-                            label: 'Returned ($returnedInDate)',
+                            label: 'Returned ($returnedInPeriod)',
                             statusKey: 'Returned',
                             activeColor: AppTheme.success,
                           ),
@@ -3243,7 +3304,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
 
                       // Records Count Indicator
                       Text(
-                        '${displayedList.length} book issue record(s) found',
+                        '${displayedList.length} record(s) found',
                         style: GoogleFonts.outfit(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
@@ -3273,7 +3334,7 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                                       .withValues(alpha: 0.5)),
                               const SizedBox(height: 12),
                               Text(
-                                'No book issues found',
+                                'No book records found',
                                 style: GoogleFonts.outfit(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
@@ -3284,13 +3345,47 @@ class _AdminDashboardScreenState extends State<AdminDashboardScreen> {
                               Text(
                                 query.isNotEmpty
                                     ? 'No matches for "$query"'
-                                    : 'No book issues match the selected "$_issuedDateFilter" filter.',
+                                    : 'No book issues or returns match the selected "$_issuedDateFilter" filter.',
                                 style: GoogleFonts.outfit(
                                   fontSize: 12,
                                   color: AppTheme.textMuted,
                                 ),
                                 textAlign: TextAlign.center,
                               ),
+                              if (_issuedDateFilter != 'All' ||
+                                  _issuedBooksStatusFilter != 'All' ||
+                                  query.isNotEmpty) ...[
+                                const SizedBox(height: 14),
+                                OutlinedButton.icon(
+                                  onPressed: () {
+                                    setState(() {
+                                      _issuedDateFilter = 'All';
+                                      _issuedBooksStatusFilter = 'All';
+                                      _issuedCustomDateRange = null;
+                                      _issuedBooksSearchQuery = '';
+                                    });
+                                  },
+                                  icon: const Icon(Icons.refresh_rounded,
+                                      size: 15),
+                                  label: Text(
+                                    'Reset All Filters',
+                                    style: GoogleFonts.outfit(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 12.5,
+                                    ),
+                                  ),
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AppTheme.primary,
+                                    side: const BorderSide(
+                                        color: AppTheme.primary),
+                                    padding: const EdgeInsets.symmetric(
+                                        horizontal: 14, vertical: 8),
+                                    shape: RoundedRectangleBorder(
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ],
                           ),
                         )

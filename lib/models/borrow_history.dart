@@ -28,6 +28,24 @@ class BorrowHistory {
     this.lastPaymentDate,
   });
 
+  static DateTime? _parseDateTime(dynamic val) {
+    if (val == null) return null;
+    if (val is Timestamp) return val.toDate().toLocal();
+    if (val is DateTime) return val.toLocal();
+    if (val is int) {
+      return DateTime.fromMillisecondsSinceEpoch(val).toLocal();
+    }
+    if (val is String) {
+      final parsed = DateTime.tryParse(val);
+      if (parsed != null) return parsed.toLocal();
+    }
+    return null;
+  }
+
+  /// Returns the actual return date, or falls back to returnDate if already marked Returned.
+  DateTime? get effectiveReturnDate =>
+      actualReturnDate ?? (!isActive ? returnDate : null);
+
   /// Creates a [BorrowHistory] from a Firestore document snapshot map.
   factory BorrowHistory.fromMap(Map<String, dynamic> map, String documentId) {
     return BorrowHistory(
@@ -35,14 +53,13 @@ class BorrowHistory {
       userId: map['userId'] as String? ?? '',
       bookId: map['bookId'] as String? ?? '',
       bookTitle: map['bookTitle'] as String? ?? 'Unknown Book',
-      borrowDate: (map['borrowDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
-      returnDate:
-          (map['returnDate'] as Timestamp?)?.toDate() ?? DateTime.now(),
+      borrowDate: _parseDateTime(map['borrowDate']) ?? DateTime.now(),
+      returnDate: _parseDateTime(map['returnDate']) ?? DateTime.now(),
       status: map['status'] as String? ?? 'Active',
       finePaid: (map['finePaid'] as num?)?.toInt() ?? 0,
-      actualReturnDate: (map['actualReturnDate'] as Timestamp?)?.toDate(),
+      actualReturnDate: _parseDateTime(map['actualReturnDate']),
       frozenFine: (map['frozenFine'] as num?)?.toInt(),
-      lastPaymentDate: (map['lastPaymentDate'] as Timestamp?)?.toDate(),
+      lastPaymentDate: _parseDateTime(map['lastPaymentDate']),
     );
   }
 
